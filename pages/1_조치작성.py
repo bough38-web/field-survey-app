@@ -1,25 +1,50 @@
 import streamlit as st
-from storage import load_events, save_action
-from datetime import datetime
+import pandas as pd
+from storage import get_owners_by_department
 
-st.title("✍️ 조치 내역 작성")
+st.markdown(
+    """
+    ### 🚨 안내
+    **정지처리계획입니다.  
+    2025-12-31일까지 등록하여 주시기 바랍니다.**
+    """
+)
 
-events = load_events()
-event_ids = events["event_id"].tolist() if not events.empty else []
+df = pd.read_csv("storage/survey_targets.csv")
 
-event_id = st.selectbox("이벤트 선택", event_ids)
-dept = st.text_input("부서")
-name = st.text_input("담당자")
-status = st.selectbox("조치 상태", ["완료", "진행중", "해당없음"])
-comment = st.text_area("조치 내용")
+row = st.selectbox(
+    "조사 대상 선택",
+    df.index,
+    format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
+)
 
-if st.button("제출"):
-    save_action({
-        "event_id": event_id,
-        "department": dept,
-        "owner": name,
-        "status": status,
-        "comment": comment,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-    })
-    st.success("조치 내역이 저장되었습니다.")
+selected = df.loc[row]
+
+# 🔒 읽기 전용 표시
+st.text_input("관리지사", selected["관리지사"], disabled=True)
+st.text_input("계약번호", selected["계약번호"], disabled=True)
+st.text_input("상호", selected["상호"], disabled=True)
+
+# ✍️ 입력 영역
+survey_text = st.text_area("조사내역 등록")
+handler = st.text_input("처리자", selected.get("담당자", ""))
+remark = st.text_area("비고")
+
+if st.button("저장"):
+    result = {
+        "관리지사": selected["관리지사"],
+        "계약번호": selected["계약번호"],
+        "상호": selected["상호"],
+        "조사내역": survey_text,
+        "처리자": handler,
+        "비고": remark
+    }
+
+    # CSV append
+    results = pd.read_csv("storage/survey_results.csv") \
+        if Path("storage/survey_results.csv").exists() else pd.DataFrame()
+
+    results = pd.concat([results, pd.DataFrame([result])])
+    results.to_csv("storage/survey_results.csv", index=False)
+
+    st.success("조사 내역이 저장되었습니다.")
