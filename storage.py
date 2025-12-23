@@ -124,3 +124,29 @@ def get_owners_by_department(department: str):
         .unique()
         .tolist()
     )
+
+def match_branch_owner(df_targets: pd.DataFrame) -> pd.DataFrame:
+    """
+    관리지사 기준으로 담당자 자동 매칭
+    """
+    contacts = load_contacts()
+
+    if contacts.empty:
+        df_targets["담당자"] = ""
+        return df_targets
+
+    merged = df_targets.merge(
+        contacts,
+        left_on="관리지사",
+        right_on="department",
+        how="left"
+    )
+
+    merged.rename(columns={"name": "담당자"}, inplace=True)
+
+    # 불필요한 컬럼 제거
+    if "department" in merged.columns:
+        merged.drop(columns=["department"], inplace=True)
+
+    return merged
+
