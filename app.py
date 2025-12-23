@@ -1,18 +1,23 @@
 import streamlit as st
-from storage import load_events
+import pandas as pd
+from storage import match_branch_owner
 
-st.set_page_config(page_title="📋 현장 조사 · 조치 요청", layout="wide")
-st.title("📋 현장 조사 · 조치 요청")
+st.title("📋 조사 대상 업로드")
 
-events = load_events()
+uploaded = st.file_uploader(
+    "조사 대상 파일 업로드 (Excel / CSV)",
+    type=["xlsx", "csv"]
+)
 
-if events.empty:
-    st.info("현재 등록된 조사/이벤트가 없습니다.")
-else:
-    for _, e in events.iterrows():
-        st.subheader(e["title"])
-        st.caption(f"유형: {e['type']} | 마감일: {e['due_date']}")
-        st.write(e["description"])
-        if e.get("reference"):
-            st.markdown(f"[참고 자료]({e['reference']})")
-        st.divider()
+if uploaded:
+    if uploaded.name.endswith("csv"):
+        df = pd.read_csv(uploaded)
+    else:
+        df = pd.read_excel(uploaded)
+
+    df = match_branch_owner(df)
+
+    st.success("자동 매칭 완료")
+    st.dataframe(df)
+
+    df.to_csv("storage/survey_targets.csv", index=False)
