@@ -1,96 +1,64 @@
-import streamlit as st
-from datetime import date
-
-from storage import (
-    load_targets,
-    save_result,
-    get_teams,
-    get_owners_by_team
-)
+import pandas as pd
+from pathlib import Path
 
 # =========================
-# 안내 문구 (상단 고정)
+# 경로 설정
 # =========================
-st.markdown(
-    """
-    ### 🚨 안내
-    **정지처리계획입니다.  
-    2025-12-31일까지 등록하여 주시기 바랍니다.**
-    """
-)
+BASE_DIR = Path(__file__).parent
+STORAGE_DIR = BASE_DIR / "storage"
+STORAGE_DIR.mkdir(exist_ok=True)
 
-# =========================
-# 조사 대상 로드
-# =========================
-df = load_targets()
-
-if df.empty:
-    st.warning("조사 대상 데이터가 아직 업로드되지 않았습니다.")
-    st.stop()
+TARGET_FILE = STORAGE_DIR / "survey_targets.csv"
+RESULT_FILE = STORAGE_DIR / "survey_results.csv"
+CONTACT_FILE = BASE_DIR / "contact_map.xlsx"
 
 # =========================
-# 조사 대상 선택
+# 담당자(Contact)
 # =========================
-row = st.selectbox(
-    "조사 대상 선택",
-    df.index,
-    format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
-)
+def load_contacts() -> pd.DataFrame:
+    if CONTACT_FILE.exists():
+        df = pd.read_excel(CONTACT_FILE)
+        df.columns = [c.strip() for c in df.columns]
+        return df
+    return pd.DataFrame(columns=["담당지사/팀", "이름"])
 
-selected = df.loc[row]
+def get_teams():
+    df = load_contacts()
+    if df.empty:
+        return []
+    return sorted(df["담당지사/팀"].dropna().unique().tolist())
 
-# =========================
-# 🔒 읽기 전용 표시 영역
-# =========================
-st.text_input("관리지사", selected["관리지사"], disabled=True)
-st.text_input("계약번호", selected["계약번호"], disabled=True)
-st.text_input("상호", selected["상호"], disabled=True)
-
-st.divider()
-
-# =========================
-# 👤 담당지사 / 담당자 (드롭다운)
-# =========================
-team = st.selectbox(
-    "담당지사 / 팀",
-    get_teams()
-)
-
-owner = st.selectbox(
-    "담당자",
-    get_owners_by_team(team)
-)
+def get_owners_by_team(team: str):
+    df = load_contacts()
+    if df.empty or not team:
+        return []
+    return (
+        df[df["담당지사/팀"] == team]["이름"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
 
 # =========================
-# ✍️ 조사 입력 영역
+# 조사 대상(Targets)
 # =========================
-survey_text = st.text_area("조사내역 등록")
+def load_targets() -> pd.DataFrame:
+    if TARGET_FILE.exists():
+        return pd.read_csv(TARGET_FILE)
+    return pd.DataFrame()
 
-# 🔥 해지_해지일자 (엑셀 I열 대응)
-cancel_date = st.date_input(
-    "해지_해지일자",
-    value=date.today()
-)
-
-remark = st.text_area("비고")
+def save_targets(df: pd.DataFrame):
+    df.to_csv(TARGET_FILE, index=False)
 
 # =========================
-# 저장 처리
+# 조사 결과(Results)
 # =========================
-if st.button("저장"):
-    if not survey_text.strip():
-        st.error("조사내역 등록은 필수입니다.")
-        st.stop()
+def load_results() -> pd.DataFrame:
+    if RESULT_FILE.exists():
+        return pd.read_csv(RESULT_FILE)
+    return pd.DataFrame()
 
-    save_result({
-        "관리지사": selected["관리지사"],
-        "계약번호": selected["계약번호"],
-        "상호": selected["상호"],
-        "담당지사/팀": team,
-        "담당자": owner,
-        "조사내역": survey_text,
-        "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
-        "비고": remark
-    })
-
-    st.success("조사 내역이 저장되었습니다.")
+def save_result(row: dict):
+    df = load_results()
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df.to_csv(RESULT_FILE, index=False)
