@@ -4,131 +4,28 @@ from pathlib import Path
 # =========================
 # 경로 설정
 # =========================
-
 BASE_DIR = Path(__file__).parent
-
 STORAGE_DIR = BASE_DIR / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
 
-EVENTS_FILE = STORAGE_DIR / "events.csv"
-ACTIONS_FILE = STORAGE_DIR / "actions.csv"
-
+TARGET_FILE = STORAGE_DIR / "survey_targets.csv"
+RESULT_FILE = STORAGE_DIR / "survey_results.csv"
 CONTACT_FILE = BASE_DIR / "contact_map.xlsx"
 
 # =========================
-# 이벤트(Event) 관련
+# 담당자 로드
 # =========================
-
-def load_events() -> pd.DataFrame:
-    """
-    이벤트(조사/공지) 목록 로드
-    """
-    if EVENTS_FILE.exists():
-        return pd.read_csv(EVENTS_FILE)
-    return pd.DataFrame(
-        columns=[
-            "event_id",
-            "title",
-            "type",
-            "due_date",
-            "description",
-            "reference"
-        ]
-    )
-
-
-# =========================
-# 조치(Action) 관련
-# =========================
-
-def load_actions() -> pd.DataFrame:
-    """
-    현업 조치 내역 로드
-    """
-    if ACTIONS_FILE.exists():
-        return pd.read_csv(ACTIONS_FILE)
-    return pd.DataFrame(
-        columns=[
-            "event_id",
-            "department",
-            "owner",
-            "status",
-            "comment",
-            "created_at"
-        ]
-    )
-
-
-def save_action(action: dict) -> None:
-    """
-    조치 내역 1건 저장
-    """
-    df = load_actions()
-    df = pd.concat(
-        [df, pd.DataFrame([action])],
-        ignore_index=True
-    )
-    df.to_csv(ACTIONS_FILE, index=False)
-
-
-# =========================
-# 담당자(Contact) 관련
-# =========================
-
 def load_contacts() -> pd.DataFrame:
-    """
-    담당자 매핑 정보 로드
-    (contact_map.xlsx)
-    """
     if CONTACT_FILE.exists():
         df = pd.read_excel(CONTACT_FILE)
-
-        # 컬럼 표준화 (혹시 모를 오타 대비)
-        df.columns = [c.strip().lower() for c in df.columns]
-
-        required_cols = {"department", "name"}
-        if not required_cols.issubset(set(df.columns)):
-            raise ValueError(
-                "contact_map.xlsx에 'department', 'name' 컬럼이 필요합니다."
-            )
-
+        df.columns = [c.strip() for c in df.columns]
         return df
-
     return pd.DataFrame(columns=["department", "name"])
 
-
 # =========================
-# 운영 편의용 헬퍼
+# 조사 대상 자동 매칭
 # =========================
-
-def get_departments():
-    """
-    부서 목록
-    """
-    contacts = load_contacts()
-    if contacts.empty:
-        return []
-    return sorted(contacts["department"].dropna().unique())
-
-
-def get_owners_by_department(department: str):
-    """
-    부서별 담당자 목록
-    """
-    contacts = load_contacts()
-    if contacts.empty:
-        return []
-    return (
-        contacts[contacts["department"] == department]["name"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-
 def match_branch_owner(df_targets: pd.DataFrame) -> pd.DataFrame:
-    """
-    관리지사 기준으로 담당자 자동 매칭
-    """
     contacts = load_contacts()
 
     if contacts.empty:
@@ -143,10 +40,30 @@ def match_branch_owner(df_targets: pd.DataFrame) -> pd.DataFrame:
     )
 
     merged.rename(columns={"name": "담당자"}, inplace=True)
-
-    # 불필요한 컬럼 제거
-    if "department" in merged.columns:
-        merged.drop(columns=["department"], inplace=True)
+    merged.drop(columns=["department"], inplace=True, errors="ignore")
 
     return merged
 
+# =========================
+# 조사 대상(Targets)
+# =========================
+def load_targets() -> pd.DataFrame:
+    if TARGET_FILE.exists():
+        return pd.read_csv(TARGET_FILE)
+    return pd.DataFrame()
+
+def save_targets(df: pd.DataFrame):
+    df.to_csv(TARGET_FILE, index=False)
+
+# =========================
+# 조사 결과(Results)
+# =========================
+def load_results() -> pd.DataFrame:
+    if RESULT_FILE.exists():
+        return pd.read_csv(RESULT_FILE)
+    return pd.DataFrame()
+
+def save_result(row: dict):
+    df = load_results()
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    df.to_csv(RESULT_FILE, index=False)
