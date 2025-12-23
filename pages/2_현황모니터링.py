@@ -1,12 +1,12 @@
 import streamlit as st
-from storage import load_actions
+from storage import load_results
 
-st.title("📊 조치 현황 모니터링")
+st.title("📊 조사 현황 모니터링")
 
-actions = load_actions()
+df = load_results()
 
-if actions.empty:
-    st.info("아직 등록된 조치 내역이 없습니다.")
+if df.empty:
+    st.info("등록된 조사 결과가 없습니다.")
 else:
-    st.metric("총 조치 건수", len(actions))
-    st.dataframe(actions)
+    st.metric("총 조사 건수", len(df))
+    st.dataframe(df)
