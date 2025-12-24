@@ -6,7 +6,8 @@ from storage import load_targets, load_results
 # ==========================================
 # 1. 페이지 설정 및 스타일링 (High-End CSS)
 # ==========================================
-st.set_page_config(page_title="종합 현황 대시보드", layout="wide", page_icon="💧")
+
+st.title("💧 종합 현황 대시보드")
 
 st.markdown("""
 <style>
