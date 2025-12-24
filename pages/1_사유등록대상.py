@@ -162,7 +162,7 @@ with st.container():
     st.markdown("### 🏢 고객 기본 정보")
     
     # 원본 파일의 해지일자 가져오기 (없으면 '-')
-    origin_cancel_date = row.get("해지_해지일자")
+    origin_cancel_date = row.get("해지일자")
     if pd.isna(origin_cancel_date):
         origin_cancel_date = "-"
     else:
