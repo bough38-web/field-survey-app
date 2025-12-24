@@ -10,19 +10,28 @@ RESULT_FILE = DATA_DIR / "survey_results.csv"
 REASON_FILE = BASE_DIR / "reason_map.csv"
 
 # =========================
-# 담당자 컬럼 정규화
+# 컬럼 정규화 (담당자 / 상호)
 # =========================
-def normalize_owner_column(df: pd.DataFrame) -> pd.DataFrame:
+def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    rename_map = {}
-    if "이름(담당자)" in df.columns:
-        rename_map["이름(담당자)"] = "담당자"
-    if "구역담당자" in df.columns:
-        rename_map["구역담당자"] = "담당자"
+    df = df.copy()
 
-    df = df.rename(columns=rename_map)
+    # 🔹 담당자 통일
+    for col in ["이름(담당자)", "구역담당자"]:
+        if col in df.columns and "담당자" not in df.columns:
+            df["담당자"] = df[col]
+
+    # 🔹 상호 통일
+    if "상호" not in df.columns:
+        for alt in ["상호명", "업체명", "고객명"]:
+            if alt in df.columns:
+                df["상호"] = df[alt]
+                break
+        else:
+            df["상호"] = ""
+
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
@@ -30,15 +39,12 @@ def normalize_owner_column(df: pd.DataFrame) -> pd.DataFrame:
 # 🔥 결과 데이터 마이그레이션
 # =========================
 def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    - 세부내용 → 세부 해지사유 및 불만 내용
-    - 구 컬럼 제거
-    """
     if df.empty:
         return df
 
     df = df.copy()
 
+    # 세부내용 → 신규 컬럼
     if "세부내용" in df.columns:
         if "세부 해지사유 및 불만 내용" not in df.columns:
             df["세부 해지사유 및 불만 내용"] = df["세부내용"]
@@ -47,8 +53,6 @@ def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
                 df["세부 해지사유 및 불만 내용"]
                 .fillna(df["세부내용"])
             )
-
-    if "세부내용" in df.columns:
         df = df.drop(columns=["세부내용"])
 
     return df
@@ -59,21 +63,16 @@ def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
 def load_targets():
     if TARGET_FILE.exists():
         df = pd.read_csv(TARGET_FILE)
-        return normalize_owner_column(df)
+        return normalize_columns(df)
     return pd.DataFrame()
 
 def load_results():
     if RESULT_FILE.exists():
         df = pd.read_csv(RESULT_FILE)
-
-        # 🔥 마이그레이션 자동 실행
         df = migrate_results_schema(df)
-        df = normalize_owner_column(df)
-
-        # 정리된 스키마로 다시 저장 (1회)
-        df.to_csv(RESULT_FILE, index=False)
+        df = normalize_columns(df)
+        df.to_csv(RESULT_FILE, index=False)  # 1회 정리
         return df
-
     return pd.DataFrame()
 
 def save_result(row: dict):
