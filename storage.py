@@ -7,9 +7,7 @@ import os
 import streamlit as st
 import time
 
-# =========================
-# 기본 경로 및 설정
-# =========================
+# --- 경로 설정 ---
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "storage"
 BACKUP_DIR = DATA_DIR / "backups"
@@ -23,130 +21,121 @@ RESULT_FILE = DATA_DIR / "survey_results.csv"
 REASON_FILE = BASE_DIR / "reason_map.csv"
 LOCK_FILE = DATA_DIR / "data.lock"
 
-# =========================
-# 🔐 관리자 인증 (Admin Auth)
-# =========================
+# --- 🔐 관리자 인증 함수 ---
 def check_admin_password():
-    """관리자 비밀번호(3867) 확인 함수"""
+    """관리자 비밀번호(3867) 확인 및 로그인 UI"""
     if "is_admin" not in st.session_state:
         st.session_state["is_admin"] = False
 
+    # 이미 로그인 된 경우
     if st.session_state["is_admin"]:
-        if st.sidebar.button("🔒 관리자 로그아웃", key="logout_btn"):
-            st.session_state["is_admin"] = False
-            st.rerun()
+        # 사이드바에 로그아웃 버튼 배치
+        with st.sidebar:
+            if st.button("🔒 관리자 로그아웃", type="secondary", use_container_width=True):
+                st.session_state["is_admin"] = False
+                st.rerun()
         return
 
-    # --- 로그인 UI ---
+    # 로그인 안 된 경우: 화면 전체를 로그인 창으로 막음
     st.markdown("""
     <style>
-        .login-box {
-            max-width: 350px; margin: 50px auto; padding: 30px;
+        .login-container {
+            max-width: 350px; margin: 100px auto; padding: 30px;
             background: white; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center;
             border: 1px solid #e2e8f0;
         }
-        .login-btn button { width: 100%; background-color: #2563eb; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        st.markdown("""
-        <div class="login-box">
-            <h3>🔒 관리자 접속</h3>
-            <p style="color:#64748b; font-size:0.9em;">보안을 위해 비밀번호를 입력하세요.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="login-container"><h3>🔒 관리자 접속</h3><p style="color:#64748b; font-size:0.8rem;">관리자 코드를 입력하세요.</p></div>', unsafe_allow_html=True)
+        password = st.text_input("Password", type="password", placeholder="Code: 3867", label_visibility="collapsed")
         
-        password = st.text_input("Password", type="password", placeholder="Access Code", label_visibility="collapsed")
-        
-        st.markdown('<div class="login-btn">', unsafe_allow_html=True)
         if st.button("로그인", type="primary", use_container_width=True):
             if password == "3867":
                 st.session_state["is_admin"] = True
-                st.toast("✅ 관리자 권한 승인", icon="🔓")
+                st.toast("✅ 로그인 성공!", icon="🔓")
                 time.sleep(0.5)
                 st.rerun()
             else:
-                st.error("❌ 비밀번호가 틀렸습니다.")
-        st.markdown('</div>', unsafe_allow_html=True)
+                st.error("⛔ 비밀번호가 틀렸습니다.")
     
-    st.stop() # 인증 안 되면 여기서 멈춤
+    st.stop() # 코드가 여기 밑으로 진행되지 않도록 차단
 
-# =========================
-# 로그 및 데이터 관리 함수들
-# =========================
-def log_activity(action, details, user="System"):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    new_log = pd.DataFrame([{"일시": timestamp, "작업자": user, "작업유형": action, "상세내용": details}])
-    with FileLock(str(LOCK_FILE)):
-        if LOG_FILE.exists():
-            new_log.to_csv(LOG_FILE, mode='a', header=False, index=False)
-        else:
-            new_log.to_csv(LOG_FILE, index=False)
-
-def load_logs():
-    if LOG_FILE.exists():
-        return pd.read_csv(LOG_FILE).sort_values("일시", ascending=False)
-    return pd.DataFrame(columns=["일시", "작업자", "작업유형", "상세내용"])
-
+# --- 데이터 처리 함수들 ---
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return df
     df = df.copy()
     df.columns = (df.columns.astype(str).str.replace("\n", "").str.replace(" ", "").str.replace("_", "").str.strip())
+    # 컬럼명 표준화
     for col in ["이름(담당자)", "구역담당자"]:
-        if col in df.columns and "담당자" not in df.columns:
-            df["담당자"] = df[col]
+        if col in df.columns and "담당자" not in df.columns: df["담당자"] = df[col]
     if "상호" not in df.columns:
         for alt in ["상호명", "업체명", "고객명"]:
-            if alt in df.columns:
-                df["상호"] = df[alt]
-                break
-        else:
-            df["상호"] = ""
+            if alt in df.columns: df["상호"] = df[alt]; break
+        else: df["상호"] = ""
+    # 해지일자 표준화
+    if "해지_해지일자" in df.columns:
+        df.rename(columns={"해지_해지일자": "해지일자"}, inplace=True)
     return df.loc[:, ~df.columns.duplicated()]
+
+def clean_contract_id(df):
+    if "계약번호" in df.columns:
+        df["계약번호"] = df["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
+    return df
 
 def load_targets():
     if TARGET_FILE.exists():
         df = pd.read_csv(TARGET_FILE, dtype={"계약번호": str})
-        return normalize_columns(df)
+        df = normalize_columns(df)
+        return clean_contract_id(df)
     return pd.DataFrame()
 
 def save_targets(df: pd.DataFrame, action_type="Upload"):
     df = normalize_columns(df)
-    if "계약번호" in df.columns:
-        df["계약번호"] = df["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
-    
+    df = clean_contract_id(df)
     with FileLock(str(LOCK_FILE)):
         if TARGET_FILE.exists():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            shutil.copy(TARGET_FILE, BACKUP_DIR / f"targets_backup_{timestamp}.csv")
+            shutil.copy(TARGET_FILE, BACKUP_DIR / f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
         df.to_csv(TARGET_FILE, index=False)
-        log_activity(action_type, f"총 {len(df)}건 저장 (백업 완료)")
+        log_activity(action_type, f"{len(df)}건 저장")
 
 def load_results():
     if RESULT_FILE.exists():
         df = pd.read_csv(RESULT_FILE, dtype={"계약번호": str})
-        return normalize_columns(df)
+        df = normalize_columns(df)
+        return clean_contract_id(df)
     return pd.DataFrame()
 
 def save_result(row: dict):
     with FileLock(str(LOCK_FILE)):
         df = load_results()
-        contract_id = str(row["계약번호"]).replace(".0", "")
-        row["계약번호"] = contract_id
+        row["계약번호"] = str(row["계약번호"]).replace(".0", "")
         
         if not df.empty and "계약번호" in df.columns:
-            idx = df[df["계약번호"] == contract_id].index
+            # 업데이트
+            idx = df[df["계약번호"] == row["계약번호"]].index
             if not idx.empty:
-                for key, value in row.items():
-                    df.loc[idx[0], key] = value
+                for k, v in row.items(): df.loc[idx[0], k] = v
             else:
                 df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         else:
+            # 신규 추가
             df = pd.DataFrame([row])
+            
         df.to_csv(RESULT_FILE, index=False)
+
+def log_activity(action, details, user="System"):
+    log_entry = pd.DataFrame([{"일시": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "작업자": user, "작업유형": action, "상세내용": details}])
+    with FileLock(str(LOCK_FILE)):
+        mode = 'a' if LOG_FILE.exists() else 'w'
+        log_entry.to_csv(LOG_FILE, mode=mode, header=(not LOG_FILE.exists()), index=False)
+
+def load_logs():
+    if LOG_FILE.exists(): return pd.read_csv(LOG_FILE).sort_values("일시", ascending=False)
+    return pd.DataFrame()
 
 def load_reason_map():
     if REASON_FILE.exists(): return pd.read_csv(REASON_FILE)
