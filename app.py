@@ -43,7 +43,7 @@ else:
     pasted = st.text_area(
         "엑셀 데이터 붙여넣기",
         height=250,
-        placeholder="관리지사\t계약번호\t상호\t해지사유\t불만유형\t세부 해지사유 및 불만 내용"
+        placeholder="관리지사\이름(담당자)t계약번호\t상호\t해지사유\t불만유형\t세부 해지사유 및 불만 내용"
     )
 
     if pasted.strip():
