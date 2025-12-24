@@ -3,11 +3,16 @@ import pandas as pd
 from io import StringIO
 import os
 import time
-# check_admin_password 추가 Import
 from storage import save_targets, load_targets, load_logs, normalize_columns, BACKUP_DIR, check_admin_password
 
-# 🔒 관리자 인증 실행
+# [삭제 또는 주석] app.py에서 이미 설정했으므로 중복 실행 불가
+# st.set_page_config(page_title="데이터 관리 센터", layout="wide", page_icon="💾")
+
+# [추가] 관리자 인증 실행
 check_admin_password()
+
+st.title("💾 데이터 관리 센터")
+# ... (나머지 코드 그대로)
 
 st.set_page_config(page_title="조사 대상 업로드", layout="wide")
 st.title("📋 조사 대상 업로드")
