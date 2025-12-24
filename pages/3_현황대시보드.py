@@ -4,12 +4,22 @@ import altair as alt
 from storage import load_targets, load_results
 
 # ==========================================
-# 1. 페이지 설정 및 스타일링
+# 1. 페이지 설정 및 스타일링 (고급화)
 # ==========================================
 st.set_page_config(page_title="종합 현황 대시보드", layout="wide", page_icon="💧")
 
 st.markdown("""
 <style>
+    /* 전체 배경 및 폰트 */
+    .stApp {
+        background-color: #f8fafc;
+    }
+    h1, h2, h3 {
+        font-family: 'Pretendard', sans-serif;
+        color: #1e293b;
+    }
+    
+    /* KPI 카드 스타일 */
     [data-testid="stMetricValue"] {
         font-size: 2.2rem;
         font-weight: 800;
@@ -18,15 +28,22 @@ st.markdown("""
     [data-testid="stMetricLabel"] {
         font-size: 1rem;
         color: #64748b;
+        font-weight: 600;
     }
+    
+    /* 컨테이너(카드) 스타일 */
     .stContainer {
         background-color: #ffffff;
-        border-radius: 15px;
-        padding: 15px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
     }
-    h1, h2, h3 {
-        font-family: 'Pretendard', sans-serif;
+    
+    /* 사이드바 스타일 개선 */
+    [data-testid="stSidebar"] {
+        background-color: #f1f5f9;
+        border-right: 1px solid #e2e8f0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -66,27 +83,50 @@ if targets.empty:
     st.stop()
 
 # ==========================================
-# 3. 사이드바 필터
+# 3. 사이드바 필터 (UX 개선)
 # ==========================================
-st.sidebar.header("🔍 필터 설정")
+with st.sidebar:
+    st.header("🔍 필터 설정")
+    st.markdown("보고 싶은 데이터를 선택하세요.")
+    
+    # 3-1. 지사 필터 (Expander로 깔끔하게)
+    with st.expander("🏢 지사 선택", expanded=True):
+        available_branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
+        other_branches = [b for b in targets["관리지사표시"].unique() if b not in BRANCH_ORDER]
+        final_branch_order = available_branches + other_branches
+        
+        # '전체 선택' 효과를 위해 기본값을 전체 리스트로 설정
+        selected_branches = st.multiselect(
+            "지사를 선택해주세요",
+            options=final_branch_order,
+            default=final_branch_order,
+            placeholder="지사 선택 (다중 가능)"
+        )
 
-available_branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
-other_branches = [b for b in targets["관리지사표시"].unique() if b not in BRANCH_ORDER]
-final_branch_order = available_branches + other_branches
+    # 3-2. 담당자 필터 (선택된 지사에 따라 연동)
+    with st.expander("👤 담당자 선택", expanded=True):
+        # 선택된 지사에 해당하는 데이터만 필터링하여 담당자 목록 추출
+        filtered_by_branch = targets[targets["관리지사표시"].isin(selected_branches)]
+        
+        if "담당자" in filtered_by_branch.columns:
+            available_owners = sorted(filtered_by_branch["담당자"].dropna().unique().tolist())
+        else:
+            available_owners = []
+            
+        selected_owners = st.multiselect(
+            "담당자를 선택해주세요",
+            options=available_owners,
+            default=[],
+            placeholder="담당자 선택 (비워두면 전체)"
+        )
 
-selected_branches = st.sidebar.multiselect(
-    "지사 선택",
-    final_branch_order,
-    default=final_branch_order
-)
+    st.markdown("---")
+    
+    # 3-3. 초기화 버튼
+    if st.button("🔄 필터 초기화", use_container_width=True):
+        st.rerun()
 
-available_owners = sorted(targets["담당자"].dropna().unique().tolist()) if "담당자" in targets.columns else []
-selected_owners = st.sidebar.multiselect(
-    "담당자 선택",
-    available_owners,
-    default=[]
-)
-
+# 필터 적용 로직
 filtered_targets = targets[targets["관리지사표시"].isin(selected_branches)]
 if selected_owners:
     filtered_targets = filtered_targets[filtered_targets["담당자"].isin(selected_owners)]
@@ -94,8 +134,11 @@ if selected_owners:
 target_ids = filtered_targets["계약번호"].unique()
 filtered_results = results[results["계약번호"].isin(target_ids)] if not results.empty else pd.DataFrame()
 
+# 필터 결과 요약 표시 (사이드바 하단)
+st.sidebar.info(f"📊 표시 대상: **{len(filtered_targets):,}건**")
+
 # ==========================================
-# 4. KPI Scorecard
+# 4. KPI Scorecard (디자인 통일)
 # ==========================================
 st.markdown("### 🚀 핵심 성과 지표 (KPI)")
 col1, col2, col3, col4 = st.columns(4)
@@ -121,7 +164,7 @@ with col4:
 st.markdown("---")
 
 # ==========================================
-# 5. 시각화 (안전한 타입 변환 및 둥근 디자인)
+# 5. 시각화 (Altair & Native Config)
 # ==========================================
 
 # ------------------------------------------
@@ -136,6 +179,7 @@ else:
     branch_stats["완료건수"] = 0
 
 branch_stats = branch_stats.fillna(0)
+# 타입 안전 변환
 branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(x))
 branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).round(1).apply(lambda x: float(x))
@@ -243,7 +287,7 @@ with row2_col1: st.altair_chart(chart3, use_container_width=True)
 with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
 # ==========================================
-# 7. 상세 데이터 테이블 (수정됨: Streamlit Native Column Config)
+# 7. 상세 데이터 테이블 (Native Column Config)
 # ==========================================
 with st.expander("📄 상세 데이터 테이블 열기"):
     st.dataframe(
@@ -262,5 +306,5 @@ with st.expander("📄 상세 데이터 테이블 열기"):
                 max_value=100,
             ),
         },
-        column_order=["관리지사표시", "대상건수", "완료건수", "진행률"] # 순서 정리
+        column_order=["관리지사표시", "대상건수", "완료건수", "진행률"]
     )
