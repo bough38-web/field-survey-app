@@ -1,11 +1,6 @@
 import streamlit as st
 from datetime import date
-from storage import (
-    load_targets,
-    save_result,
-    get_teams,
-    get_owners_by_team
-)
+from storage import load_targets, save_result
 
 st.markdown(
     """
@@ -17,7 +12,7 @@ st.markdown(
 
 df = load_targets()
 if df.empty:
-    st.warning("조사 대상 데이터가 아직 없습니다.")
+    st.warning("조사 대상 데이터가 없습니다.")
     st.stop()
 
 row = st.selectbox(
@@ -25,14 +20,13 @@ row = st.selectbox(
     df.index,
     format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
 )
+
 selected = df.loc[row]
 
 st.text_input("관리지사", selected["관리지사"], disabled=True)
 st.text_input("계약번호", selected["계약번호"], disabled=True)
 st.text_input("상호", selected["상호"], disabled=True)
-
-team = st.selectbox("담당지사 / 팀", get_teams())
-owner = st.selectbox("담당자", get_owners_by_team(team))
+st.text_input("담당자", selected.get("담당자", ""), disabled=True)
 
 survey = st.text_area("조사내역 등록")
 cancel_date = st.date_input("해지_해지일자", value=date.today())
@@ -47,8 +41,7 @@ if st.button("저장"):
         "관리지사": selected["관리지사"],
         "계약번호": selected["계약번호"],
         "상호": selected["상호"],
-        "담당지사/팀": team,
-        "담당자": owner,
+        "담당자": selected.get("담당자", ""),
         "조사내역": survey,
         "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
