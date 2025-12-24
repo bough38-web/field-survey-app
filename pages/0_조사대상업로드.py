@@ -1,8 +1,16 @@
-
 import streamlit as st
 import pandas as pd
 from io import StringIO
-from storage import save_targets, normalize_columns
+import os
+import time
+# check_admin_password 추가 Import
+from storage import save_targets, load_targets, load_logs, normalize_columns, BACKUP_DIR, check_admin_password
+
+# Page Config
+st.set_page_config(page_title="데이터 관리 센터", layout="wide", page_icon="💾")
+
+# 🔒 관리자 인증 실행
+check_admin_password()
 
 st.set_page_config(page_title="조사 대상 업로드", layout="wide")
 st.title("📋 조사 대상 업로드")
