@@ -15,14 +15,40 @@ if df.empty:
     st.warning("조사 대상 데이터가 없습니다.")
     st.stop()
 
+# =========================
+# 🔹 사이드바 필터
+# =========================
+st.sidebar.header("🔎 필터")
+
+branches = ["전체"] + sorted(df["관리지사"].dropna().unique().tolist())
+selected_branch = st.sidebar.selectbox("관리지사", branches)
+
+filtered = df if selected_branch == "전체" else df[df["관리지사"] == selected_branch]
+
+owners = ["전체"] + sorted(filtered["담당자"].dropna().unique().tolist())
+selected_owner = st.sidebar.selectbox("담당자", owners)
+
+if selected_owner != "전체":
+    filtered = filtered[filtered["담당자"] == selected_owner]
+
+if filtered.empty:
+    st.warning("선택한 조건에 해당하는 데이터가 없습니다.")
+    st.stop()
+
+# =========================
+# 조사 대상 선택
+# =========================
 row = st.selectbox(
     "조사 대상 선택",
-    df.index,
-    format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
+    filtered.index,
+    format_func=lambda i: f"{filtered.loc[i,'계약번호']} | {filtered.loc[i,'상호']}"
 )
 
-selected = df.loc[row]
+selected = filtered.loc[row]
 
+# =========================
+# 표시 영역
+# =========================
 st.text_input("관리지사", selected["관리지사"], disabled=True)
 st.text_input("계약번호", selected["계약번호"], disabled=True)
 st.text_input("상호", selected["상호"], disabled=True)
