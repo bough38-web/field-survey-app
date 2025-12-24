@@ -69,6 +69,10 @@ if selected_owner != "전체":
 total_targets = len(targets_f)
 registered_contracts = results_f["계약번호"].unique()
 registered_count = len(registered_contracts)
+registered_results = results[
+    results.get("해지사유").notna()
+] if "해지사유" in results.columns else results.iloc[0:0]
+
 unregistered_count = total_targets - registered_count
 progress_rate = round((registered_count / total_targets) * 100, 1) if total_targets else 0
 
@@ -82,11 +86,14 @@ def rate_icon(rate):
 rate_status = rate_icon(progress_rate)
 
 today = date.today().strftime("%Y-%m-%d")
-today_count = (
-    registered_results[
-        registered_results.get("해지_해지일자", "") == today
+
+if "해지_해지일자" in registered_results.columns:
+    today_count = registered_results[
+        registered_results["해지_해지일자"] == today
     ].shape[0]
-    if not registered_results.empty else 0
+else:
+    today_count = 0
+
 )
 
 # =========================
