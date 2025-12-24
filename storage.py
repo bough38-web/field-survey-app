@@ -143,3 +143,91 @@ def load_reason_map():
     if REASON_FILE.exists():
         return pd.read_csv(REASON_FILE)
     return pd.DataFrame(columns=["해지사유", "불만유형"])
+
+# ... (기존 load_targets, save_result 등 함수들은 그대로 유지) ...
+
+# =========================
+# 🔐 관리자 인증 (Admin Auth)
+# =========================
+import streamlit as st
+import time
+
+def check_admin_password():
+    """
+    관리자 비밀번호를 확인합니다.
+    인증되지 않으면 로그인 화면을 띄우고 앱 실행을 중단(st.stop)합니다.
+    """
+    # 세션 상태 초기화
+    if "is_admin" not in st.session_state:
+        st.session_state["is_admin"] = False
+
+    # 이미 인증된 경우 패스
+    if st.session_state["is_admin"]:
+        # 로그아웃 버튼 (사이드바)
+        if st.sidebar.button("🔒 관리자 로그아웃"):
+            st.session_state["is_admin"] = False
+            st.rerun()
+        return
+
+    # --- 로그인 UI ---
+    st.markdown("""
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 40px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        .login-header {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 10px;
+            font-family: 'Pretendard', sans-serif;
+        }
+        .login-sub {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        div.stButton > button:first-child {
+            width: 100%;
+            background-color: #2563eb;
+            color: white;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+        }
+        div.stButton > button:first-child:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div class="login-container">
+            <div class="login-header">🔒 관리자 접근 제한</div>
+            <div class="login-sub">이 페이지는 관리자 전용입니다.<br>비밀번호를 입력해주세요.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        password = st.text_input("비밀번호", type="password", placeholder="Access Code", label_visibility="collapsed")
+        
+        if st.button("로그인 (Login)", type="primary"):
+            if password == "3867":
+                st.session_state["is_admin"] = True
+                st.toast("✅ 로그인되었습니다!", icon="🔓")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("❌ 비밀번호가 올바르지 않습니다.")
+    
+    # 인증되지 않았으면 아래 코드 실행 막기
+    st.stop()
