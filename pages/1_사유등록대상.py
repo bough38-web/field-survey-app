@@ -182,7 +182,7 @@ with st.container():
         st.markdown(f"<div class='info-label'>담당자</div><div class='info-value'>{row.get('담당자', '-')}</div>", unsafe_allow_html=True)
     with c5:
         # [수정] 원본 해지일자를 여기에 고정 (수정 불가)
-        st.markdown(f"<div class='info-label'>원본 해지일자</div><div class='highlight-value'>{origin_cancel_date}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='info-label'>해지_해지일자</div><div class='highlight-value'>{origin_cancel_date}</div>", unsafe_allow_html=True)
 
 # --- [카드 2] 조치 내용 입력 (사유 등록 일자 적용) ---
 reason_map = load_reason_map()
