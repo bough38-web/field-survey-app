@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from storage import load_targets, load_results, check_admin_password
 
-# 🔒 관리자 인증 (필수)
+# 🔒 관리자 인증
 check_admin_password()
 
 st.title("📌 관리자 홈 (Admin Hub)")
@@ -24,7 +24,7 @@ with col3: st.metric("진행률", f"{progress:.1f}%")
 
 st.progress(progress / 100)
 
-st.info("좌측 메뉴에서 [데이터 업로드] 또는 [결과 모니터링]을 이용하세요.")
+st.info("좌측 메뉴에서 [조사 대상 업로드] 또는 [결과 모니터링]을 이용하세요.")
 
 if not results.empty:
     with st.expander("📊 최근 조치 내역 (최신 5건)"):
