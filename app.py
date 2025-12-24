@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from io import StringIO
-from storage import save_targets, normalize_owner_column
+from storage import normalize_owner_column
+
 
 st.title("📋 조사 대상 업로드")
 
