@@ -72,7 +72,7 @@ idx = st.selectbox("작업 대상 선택", pending.index, format_func=lambda i: 
 row = pending.loc[idx]
 
 st.markdown("### 🏢 고객 정보")
-origin_date = row.get("해지_해지일자", "-")
+origin_date = row.get("해지일자", "-")
 try: origin_date = pd.to_datetime(origin_date).strftime("%Y-%m-%d")
 except: pass
 
@@ -101,7 +101,7 @@ if st.button("💾 저장 후 다음 (Save & Next)", type="primary", use_contain
     data = {
         "관리지사": row.get("관리지사",""), "계약번호": row.get("계약번호",""), "상호": row.get("상호",""), "담당자": row.get("담당자",""),
         "해지사유": r, "불만유형": c, "세부 해지사유 및 불만 내용": d,
-        "해지_해지일자": row.get("해지_해지일자",""), "사유등록일자": rd.strftime("%Y-%m-%d"), "비고": rm,
+        "해지_해지일자": row.get("해지일자",""), "사유등록일자": rd.strftime("%Y-%m-%d"), "비고": rm,
         "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     save_result(data)
