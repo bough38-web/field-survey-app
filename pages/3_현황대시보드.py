@@ -36,7 +36,7 @@ st.title("💧 종합 현황 대시보드")
 st.markdown("실시간 **조치 진척률** 및 **해지 사유** 시각화 리포트")
 
 # ==========================================
-# 2. 데이터 로드 및 전처리 (에러 방지 핵심)
+# 2. 데이터 로드 및 전처리
 # ==========================================
 targets = load_targets()
 results = load_results()
@@ -134,7 +134,7 @@ st.markdown("---")
 # ==========================================
 
 # ------------------------------------------
-# [데이터 집계] SchemaValidationError 방지 처리
+# [데이터 집계]
 # ------------------------------------------
 branch_stats = filtered_targets.groupby("관리지사표시").size().reset_index(name="대상건수")
 
@@ -144,16 +144,14 @@ if not filtered_results.empty:
 else:
     branch_stats["완료건수"] = 0
 
-# [중요] NaN을 0으로 채우고, 반드시 정수형(int)으로 변환해야 Altair 오류가 안 납니다.
+# [중요] NaN -> 0 변환 및 정수형 변환 (Altair 오류 방지)
 branch_stats = branch_stats.fillna(0)
 branch_stats["대상건수"] = branch_stats["대상건수"].astype(int)
 branch_stats["완료건수"] = branch_stats["완료건수"].astype(int)
-
-# 진행률 계산
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).round(1)
 
 # ------------------------------------------
-# [Chart 1] 지사별 진척도 (Rounded Bar - 물방울 캡슐 효과)
+# [Chart 1] 지사별 진척도 (Rounded Bar)
 # ------------------------------------------
 base = alt.Chart(branch_stats).encode(
     x=alt.X("관리지사표시", sort=BRANCH_ORDER, title=None, axis=alt.Axis(labelAngle=0))
@@ -165,7 +163,7 @@ bar_bg = base.mark_bar(color="#f1f5f9", cornerRadius=15, size=35).encode(
     tooltip=["관리지사표시", "대상건수"]
 )
 
-# 진행 막대 (파란색 그라데이션 느낌, 둥근 모서리)
+# 진행 막대 (파란색, 둥근 모서리)
 bar_fg = base.mark_bar(color="#3b82f6", cornerRadius=15, size=35).encode(
     y=alt.Y("완료건수"),
     tooltip=["관리지사표시", "완료건수", "진행률"]
@@ -183,37 +181,43 @@ chart1 = (bar_bg + bar_fg + text).properties(
 )
 
 # ------------------------------------------
-# [Chart 2] 해지 사유 (Bubble Chart - 물방울 효과)
+# [Chart 2] 해지 사유 (Bubble Chart - 오류 수정됨)
 # ------------------------------------------
 if not filtered_results.empty and "해지사유" in filtered_results.columns:
     reason_counts = filtered_results["해지사유"].value_counts().reset_index()
     reason_counts.columns = ["해지사유", "건수"]
     
-    # 버블 차트 생성
-    chart2 = alt.Chart(reason_counts).mark_circle().encode(
-        x=alt.X("해지사유", title=None, axis=None),
+    # 기본 베이스 차트 생성
+    base_bubble = alt.Chart(reason_counts).encode(
+        x=alt.X("해지사유", title=None, axis=alt.Axis(labels=True, ticks=False, domain=False)),
         y=alt.Y("건수", title=None, axis=None),
-        size=alt.Size("건수", scale=alt.Scale(range=[500, 3000]), legend=None), # 버블 크기
-        color=alt.Color("해지사유", legend=alt.Legend(title="사유"), scale=alt.Scale(scheme="blues")),
         tooltip=["해지사유", "건수"]
-    ).properties(
+    )
+    
+    # 1. 물방울 (원)
+    bubbles = base_bubble.mark_circle().encode(
+        size=alt.Size("건수", scale=alt.Scale(range=[500, 3000]), legend=None),
+        color=alt.Color("해지사유", legend=None, scale=alt.Scale(scheme="blues"))
+    )
+    
+    # 2. 텍스트 (건수 표시)
+    text_bubble = base_bubble.mark_text(color="white", fontWeight="bold").encode(
+        text="건수"
+    )
+    
+    # 3. [수정] 결합(+)을 먼저 한 뒤, properties와 configure를 적용해야 함
+    chart2 = (bubbles + text_bubble).properties(
         title="💧 해지 사유 분포 (Bubble View)",
         height=320
-    ).configure_view(strokeWidth=0) # 테두리 제거
-    
-    # 텍스트 추가 (버블 위에 글자 얹기)
-    text_bubble = alt.Chart(reason_counts).mark_text(color="white", fontWeight="bold").encode(
-        x=alt.X("해지사유", axis=None),
-        y=alt.Y("건수", axis=None),
-        text=alt.Text("건수")
+    ).configure_view(
+        strokeWidth=0  # 테두리 제거
     )
-    chart2 = chart2 + text_bubble
 
 else:
     chart2 = alt.Chart(pd.DataFrame({"text": ["데이터 없음"]})).mark_text().encode(text="text").properties(title="데이터 없음", height=320)
 
 # ------------------------------------------
-# [Chart 3] 담당자별 실적 (Lollipop Chart - 모던 스타일)
+# [Chart 3] 담당자별 실적 (Lollipop Chart)
 # ------------------------------------------
 if not filtered_results.empty and "담당자" in filtered_results.columns:
     owner_counts = filtered_results["담당자"].value_counts().reset_index()
@@ -232,21 +236,21 @@ else:
     chart3 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
 # ------------------------------------------
-# [Chart 4] 일자별 추이 (Area Chart - 흐르는 물 효과)
+# [Chart 4] 일자별 추이 (Area Chart)
 # ------------------------------------------
 if not filtered_results.empty and "처리일시" in filtered_results.columns:
     filtered_results["처리날짜"] = pd.to_datetime(filtered_results["처리일시"], errors='coerce').dt.date
     daily_counts = filtered_results.groupby("처리날짜").size().reset_index(name="건수")
-    daily_counts["건수"] = daily_counts["건수"].astype(int) # 정수 변환
+    daily_counts["건수"] = daily_counts["건수"].astype(int)
 
     chart4 = alt.Chart(daily_counts).mark_area(
-        interpolate='monotone', # 부드러운 곡선
+        interpolate='monotone', 
         fillOpacity=0.6,
         line={'color':'#6366f1'}
     ).encode(
         x=alt.X("처리날짜:T", title=None),
         y=alt.Y("건수:Q", title="등록 건수"),
-        color=alt.value("#818cf8"), # Indigo
+        color=alt.value("#818cf8"),
         tooltip=["처리날짜", "건수"]
     ).properties(
         title="📅 일별 처리 흐름",
