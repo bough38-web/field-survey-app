@@ -33,27 +33,23 @@ def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
     """
     - 세부내용 → 세부 해지사유 및 불만 내용
     - 구 컬럼 제거
-    - 이후 표준 컬럼만 유지
     """
     if df.empty:
         return df
 
     df = df.copy()
 
-    # 1️⃣ 기존 세부내용 → 신규 컬럼 이관
     if "세부내용" in df.columns:
         if "세부 해지사유 및 불만 내용" not in df.columns:
             df["세부 해지사유 및 불만 내용"] = df["세부내용"]
         else:
-            # 둘 다 있으면 값이 있는 쪽 우선
             df["세부 해지사유 및 불만 내용"] = (
                 df["세부 해지사유 및 불만 내용"]
                 .fillna(df["세부내용"])
             )
 
-    # 2️⃣ 구 컬럼 제거
-    drop_cols = ["세부내용"]
-    df = df.drop(columns=[c for c in drop_cols if c in df.columns])
+    if "세부내용" in df.columns:
+        df = df.drop(columns=["세부내용"])
 
     return df
 
@@ -70,13 +66,12 @@ def load_results():
     if RESULT_FILE.exists():
         df = pd.read_csv(RESULT_FILE)
 
-        # 🔥 마이그레이션 적용
+        # 🔥 마이그레이션 자동 실행
         df = migrate_results_schema(df)
         df = normalize_owner_column(df)
 
-        # 👉 정리된 스키마로 다시 저장 (1회)
+        # 정리된 스키마로 다시 저장 (1회)
         df.to_csv(RESULT_FILE, index=False)
-
         return df
 
     return pd.DataFrame()
