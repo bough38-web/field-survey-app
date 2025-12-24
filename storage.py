@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import StringIO
 import os
+# [중요] storage.py에서 정의한 함수들을 가져옵니다.
 from storage import save_targets, load_targets, load_logs, normalize_columns, BACKUP_DIR
 
 # ==========================================
@@ -77,6 +78,7 @@ with tab1:
         if st.button("🚀 데이터 반영하기", type="primary"):
             save_targets(df_new, action_type="New Upload")
             st.success(f"✅ 총 {len(df_new)}건이 성공적으로 반영되었습니다. (자동 백업 완료)")
+            time.sleep(1) # 잠시 대기
             st.rerun()
 
 # ------------------------------------------
@@ -106,6 +108,7 @@ with tab2:
                 # 변경사항 저장 로직
                 save_targets(edited_df, action_type="Manual Edit")
                 st.success("✅ 수정사항이 저장되었습니다.")
+                time.sleep(1)
                 st.rerun()
 
 # ------------------------------------------
