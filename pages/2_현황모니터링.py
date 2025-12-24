@@ -43,7 +43,7 @@ targets["계약번호"] = targets["계약번호"].astype(str)
 results["계약번호"] = results["계약번호"].astype(str)
 
 # =========================
-# 등록 기준: 해지사유가 있는 건만
+# 등록 기준: 해지사유 입력된 건만
 # =========================
 if "해지사유" in results.columns:
     registered_results = results[results["해지사유"].notna()]
@@ -82,7 +82,16 @@ processed_count = results_f["계약번호"].nunique()
 unprocessed_count = total_targets - processed_count
 progress_rate = round((processed_count / total_targets) * 100, 1) if total_targets else 0
 
-# 오늘 등록 건수 (에러 방어)
+def rate_icon(rate):
+    if rate >= 70:
+        return "🔴"
+    elif rate >= 40:
+        return "🟡"
+    return "🟢"
+
+rate_status = rate_icon(progress_rate)
+
+# 오늘 등록 건수 (완전 방어)
 today = date.today().strftime("%Y-%m-%d")
 if "해지_해지일자" in registered_results.columns:
     today_count = registered_results[
@@ -100,7 +109,7 @@ c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("업로드 대상", total_targets)
 c2.metric("등록 건수", processed_count)
 c3.metric("미등록 건수", unprocessed_count)
-c4.metric("등록율", f"{progress_rate}%")
+c4.metric("등록율", f"{progress_rate}% {rate_status}")
 c5.metric("오늘 등록", today_count)
 
 st.divider()
@@ -114,13 +123,13 @@ if selected_branch == "전체":
     branch_target = (
         targets.groupby("관리지사표시")["계약번호"]
         .nunique()
-        .reindex(available_branches)
+        .reindex(BRANCH_ORDER)
     )
 
     branch_done = (
         registered_results.groupby("관리지사표시")["계약번호"]
         .nunique()
-        .reindex(available_branches)
+        .reindex(BRANCH_ORDER)
     )
 
     summary = pd.DataFrame({
@@ -133,21 +142,13 @@ if selected_branch == "전체":
         summary["미등록건수"] / summary["대상건수"] * 100
     ).round(1)
 
-    # 상태 아이콘
-    def rate_icon(rate):
-        if rate >= 70:
-            return "🔴"
-        elif rate >= 40:
-            return "🟡"
-        return "🟢"
-
     summary["상태"] = summary["미등록율(%)"].apply(rate_icon)
 
-    # 그래프 1: 대상 vs 등록
-    st.subheader("📊 지사별 대상 vs 등록")
+    # 📊 대상 vs 등록
+    st.subheader("📊 지사별 대상건수 vs 등록건수")
     st.bar_chart(summary[["대상건수", "등록건수"]])
 
-    # 그래프 2: 미등록율
+    # 📉 미등록율
     st.subheader("📉 지사별 미등록율 (%)")
     st.bar_chart(summary[["미등록율(%)"]])
 
@@ -181,6 +182,14 @@ if pw != "3867":
 
 st.success("관리자 인증 완료")
 
+# 등록 완료 대상
+st.markdown("### 🟢 등록 완료 대상 목록")
+registered_list = targets_f[
+    targets_f["계약번호"].isin(processed_contracts)
+]
+st.dataframe(registered_list, use_container_width=True)
+
+# 다운로드
 csv = unprocessed.to_csv(index=False).encode("utf-8-sig")
 st.download_button(
     label="📥 미등록 대상 다운로드",
