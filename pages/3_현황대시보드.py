@@ -4,7 +4,7 @@ import altair as alt
 from storage import load_targets, load_results
 
 # ==========================================
-# 1. 페이지 설정 및 스타일링 (고급화)
+# 1. 페이지 설정 및 스타일링
 # ==========================================
 st.set_page_config(page_title="종합 현황 대시보드", layout="wide", page_icon="💧")
 
@@ -83,30 +83,33 @@ if targets.empty:
     st.stop()
 
 # ==========================================
-# 3. 사이드바 필터 (UX 개선)
+# 3. 사이드바 필터 (개선됨: 비워두면 전체)
 # ==========================================
 with st.sidebar:
     st.header("🔍 필터 설정")
     st.markdown("보고 싶은 데이터를 선택하세요.")
     
-    # 3-1. 지사 필터 (Expander로 깔끔하게)
+    # 3-1. 지사 필터
     with st.expander("🏢 지사 선택", expanded=True):
         available_branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
         other_branches = [b for b in targets["관리지사표시"].unique() if b not in BRANCH_ORDER]
         final_branch_order = available_branches + other_branches
         
-        # '전체 선택' 효과를 위해 기본값을 전체 리스트로 설정
+        # [수정됨] default=[] (비워둠), placeholder 메시지 변경
         selected_branches = st.multiselect(
             "지사를 선택해주세요",
             options=final_branch_order,
-            default=final_branch_order,
-            placeholder="지사 선택 (다중 가능)"
+            default=[], 
+            placeholder="지사 선택 (비워두면 전체)"
         )
 
     # 3-2. 담당자 필터 (선택된 지사에 따라 연동)
     with st.expander("👤 담당자 선택", expanded=True):
-        # 선택된 지사에 해당하는 데이터만 필터링하여 담당자 목록 추출
-        filtered_by_branch = targets[targets["관리지사표시"].isin(selected_branches)]
+        # 지사 선택이 비어있으면 전체 데이터, 선택되어 있으면 해당 지사 데이터만 사용
+        if selected_branches:
+            filtered_by_branch = targets[targets["관리지사표시"].isin(selected_branches)]
+        else:
+            filtered_by_branch = targets
         
         if "담당자" in filtered_by_branch.columns:
             available_owners = sorted(filtered_by_branch["담당자"].dropna().unique().tolist())
@@ -127,18 +130,24 @@ with st.sidebar:
         st.rerun()
 
 # 필터 적용 로직
-filtered_targets = targets[targets["관리지사표시"].isin(selected_branches)]
+# 1. 지사 필터: 비어있으면 전체(targets), 있으면 필터링
+if selected_branches:
+    filtered_targets = targets[targets["관리지사표시"].isin(selected_branches)]
+else:
+    filtered_targets = targets
+
+# 2. 담당자 필터: 비어있으면 위 결과 유지, 있으면 추가 필터링
 if selected_owners:
     filtered_targets = filtered_targets[filtered_targets["담당자"].isin(selected_owners)]
 
 target_ids = filtered_targets["계약번호"].unique()
 filtered_results = results[results["계약번호"].isin(target_ids)] if not results.empty else pd.DataFrame()
 
-# 필터 결과 요약 표시 (사이드바 하단)
+# 필터 결과 요약 표시
 st.sidebar.info(f"📊 표시 대상: **{len(filtered_targets):,}건**")
 
 # ==========================================
-# 4. KPI Scorecard (디자인 통일)
+# 4. KPI Scorecard
 # ==========================================
 st.markdown("### 🚀 핵심 성과 지표 (KPI)")
 col1, col2, col3, col4 = st.columns(4)
@@ -164,7 +173,7 @@ with col4:
 st.markdown("---")
 
 # ==========================================
-# 5. 시각화 (Altair & Native Config)
+# 5. 시각화
 # ==========================================
 
 # ------------------------------------------
@@ -179,7 +188,6 @@ else:
     branch_stats["완료건수"] = 0
 
 branch_stats = branch_stats.fillna(0)
-# 타입 안전 변환
 branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(x))
 branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).round(1).apply(lambda x: float(x))
@@ -287,7 +295,7 @@ with row2_col1: st.altair_chart(chart3, use_container_width=True)
 with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
 # ==========================================
-# 7. 상세 데이터 테이블 (Native Column Config)
+# 7. 상세 데이터 테이블
 # ==========================================
 with st.expander("📄 상세 데이터 테이블 열기"):
     st.dataframe(
