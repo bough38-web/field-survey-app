@@ -11,7 +11,7 @@ BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양�
 st.info("📢 정지처리계획입니다. 2025-12-31일까지 등록해 주세요.")
 
 # =========================
-# 1. 데이터 로드 및 초기화 (버그 수정 핵심)
+# 1. 데이터 로드 및 초기화
 # =========================
 targets = load_targets()
 results = load_results()
@@ -26,7 +26,6 @@ if "계약번호" in targets.columns:
     targets["계약번호"] = targets["계약번호"].astype(str)
 
 # '계약번호' 컬럼을 문자열로 통일 (결과 데이터)
-# 수정사항: results가 비어있거나 컬럼이 없을 때 에러 방지
 if not results.empty and "계약번호" in results.columns:
     results["계약번호"] = results["계약번호"].astype(str)
     registered_contracts = results[results["해지사유"].notna()]["계약번호"].unique()
@@ -52,7 +51,6 @@ st.sidebar.header("🔎 필터")
 
 # 지사 필터
 available_branches = [b for b in BRANCH_ORDER if b in pending["관리지사표시"].unique()]
-# 기타 지사가 있을 경우 추가
 other_branches = [b for b in pending["관리지사표시"].unique() if b not in BRANCH_ORDER]
 branch_options = ["전체"] + available_branches + other_branches
 
@@ -70,7 +68,7 @@ if "담당자" in pending.columns:
         pending = pending[pending["담당자"] == owner]
 
 # =========================
-# 3. 대상 선택 (Pending 목록이 있을 때만)
+# 3. 대상 선택
 # =========================
 if pending.empty:
     st.warning("조건에 맞는 대상이 없습니다.")
@@ -115,11 +113,11 @@ with c2:
     complaints = reason_map[reason_map["해지사유"] == reason]["불만유형"].unique()
     complaint = st.selectbox("불만유형", complaints)
 
+# [수정됨] 항상 입력 가능하도록 변경 (disabled 옵션 삭제)
 detail = st.text_area(
     "세부 해지사유 및 불만 내용",
     height=100,
-    placeholder="불만 내용이 있다면 구체적으로 작성해주세요.",
-    disabled=(complaint == "불만없음")
+    placeholder="구체적인 내용을 자유롭게 작성해주세요."
 )
 
 # 날짜 및 비고
@@ -154,7 +152,7 @@ if st.button("💾 저장 후 다음", type="primary", use_container_width=True)
         "세부 해지사유 및 불만 내용": detail,
         "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark,
-        "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S") # 처리 시간 기록 추가
+        "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
     save_result(save_data)
