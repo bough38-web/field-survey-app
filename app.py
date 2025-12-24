@@ -3,7 +3,10 @@ import pandas as pd
 from io import StringIO
 from storage import normalize_owner_column
 
+st.set_page_config(page_title="현장조사 관리 허브", layout="wide")
 
+st.title("📌 현장조사 관리 허브")
+st.markdown("좌측 메뉴에서 기능을 선택하세요.")
 st.title("📋 조사 대상 업로드")
 
 method = st.radio(
