@@ -15,19 +15,14 @@ if not results.empty and "해지사유" in results.columns:
     done = results[results["해지사유"].notna()]["계약번호"].astype(str).unique()
     targets = targets[~targets["계약번호"].astype(str).isin(done)]
 
-# 🔑 필수 컬럼만 체크 (상호는 dropna ❌)
-targets = targets.dropna(subset=["관리지사", "계약번호"])
+targets = targets.dropna(subset=["관리지사","계약번호"])
 targets["관리지사표시"] = targets["관리지사"].str.replace("지사","",regex=False).str.strip()
 
 if targets.empty:
     st.success("🎉 모든 대상이 처리 완료되었습니다.")
     st.stop()
 
-# =========================
-# 사이드바 필터
-# =========================
 st.sidebar.header("🔎 필터")
-
 branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
 sel_branch = st.sidebar.radio("관리지사", ["전체"] + branches)
 df = targets if sel_branch=="전체" else targets[targets["관리지사표시"]==sel_branch]
@@ -39,9 +34,6 @@ if sel_owner!="전체":
 
 df = df.reset_index(drop=True)
 
-# =========================
-# 대상 선택
-# =========================
 idx = st.selectbox(
     "처리 대상 선택",
     range(len(df)),
@@ -49,13 +41,11 @@ idx = st.selectbox(
 )
 row = df.loc[idx]
 
-# 기본 정보
 st.text_input("관리지사", row["관리지사"], disabled=True)
 st.text_input("계약번호", row["계약번호"], disabled=True)
 st.text_input("상호", row["상호"], disabled=True)
 st.text_input("담당자", row.get("담당자",""), disabled=True)
 
-# 해지사유 / 불만유형
 reason_map = load_reason_map()
 reason = st.selectbox("해지사유", sorted(reason_map["해지사유"].unique()))
 complaints = reason_map[reason_map["해지사유"]==reason]["불만유형"].unique()
