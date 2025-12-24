@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
-# check_admin_password 추가 Import
 from storage import load_results, check_admin_password
 
-# Page Config
-st.set_page_config(page_title="등록 결과 모니터링", layout="wide", page_icon="📊")
+# [삭제]
+# st.set_page_config(page_title="등록 결과 모니터링", layout="wide", page_icon="📊")
 
-# 🔒 관리자 인증 실행
+# [추가] 관리자 인증 실행
 check_admin_password()
 
 st.title("📊 등록 결과 모니터링 (Admin)")
+# ... (나머지 코드 그대로)
 
 # ==========================================
 # 1. 데이터 로드
