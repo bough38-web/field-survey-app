@@ -43,15 +43,16 @@ targets["계약번호"] = targets["계약번호"].astype(str)
 results["계약번호"] = results["계약번호"].astype(str)
 
 # =========================
-# 등록 기준: 해지사유가 있는 건만
+# 등록 기준: 해지사유 존재
 # =========================
-if "해지사유" in results.columns:
-    registered_results = results[results["해지사유"].notna()]
-else:
-    registered_results = results.iloc[0:0]
+registered_results = (
+    results[results["해지사유"].notna()]
+    if "해지사유" in results.columns
+    else results.iloc[0:0]
+)
 
 # =========================
-# 사이드바 필터 (관리지사 + 담당자)
+# 🔎 사이드바 필터
 # =========================
 st.sidebar.header("🔎 필터")
 
@@ -69,7 +70,7 @@ else:
     targets_f = targets[targets["관리지사표시"] == selected_branch]
     results_f = registered_results[registered_results["관리지사표시"] == selected_branch]
 
-owners = sorted(targets_f["담당자"].dropna().unique().tolist())
+owners = sorted(targets_f.get("담당자", pd.Series()).dropna().unique().tolist())
 selected_owner = st.sidebar.radio("담당자", ["전체"] + owners)
 
 if selected_owner != "전체":
@@ -105,7 +106,7 @@ c5.metric("오늘 등록", today_count)
 st.divider()
 
 # =========================
-# 지사별 대상 vs 등록 (정렬 고정)
+# 🏢 지사별 대상 vs 등록 (전체 기준 / 정렬 고정)
 # =========================
 st.markdown("## 🏢 지사별 대상건수 vs 등록건수")
 
@@ -136,7 +137,7 @@ st.dataframe(branch_summary.reset_index(), use_container_width=True)
 st.divider()
 
 # =========================
-# 담당자별 미등록 건수 (내림차순)
+# 👤 담당자별 미등록 건수
 # =========================
 st.markdown("## 👤 담당자별 미등록 건수")
 
@@ -155,7 +156,7 @@ else:
 st.divider()
 
 # =========================
-# 미등록 대상 상세
+# 🔴 미등록 대상 상세
 # =========================
 st.markdown("## 🔴 미등록 대상 상세")
 
@@ -183,7 +184,7 @@ if pw != "3867":
 st.success("관리자 인증 완료")
 
 # =========================
-# 등록 완료 대상 (관리자 수정 가능)
+# 🟢 등록 완료 대상 (관리자 수정 가능)
 # =========================
 st.markdown("### 🟢 등록 완료 대상 목록 (수정 가능)")
 
