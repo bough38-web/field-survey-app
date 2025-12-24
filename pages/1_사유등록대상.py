@@ -4,7 +4,7 @@ import time
 from datetime import date
 from storage import load_targets, load_results, save_result, load_reason_map
 
-# st.set_page_config 삭제됨 (app.py에서 처리)
+# st.set_page_config는 app.py에서 처리됨
 
 st.markdown("""
 <style>
@@ -97,7 +97,7 @@ with st.container():
     with c4: rm = st.text_area("비고", height=70)
 
 st.markdown("---")
-if st.button("💾 저장 후 다음", type="primary", use_container_width=True):
+if st.button("💾 저장 후 다음 (Save & Next)", type="primary", use_container_width=True):
     data = {
         "관리지사": row.get("관리지사",""), "계약번호": row.get("계약번호",""), "상호": row.get("상호",""), "담당자": row.get("담당자",""),
         "해지사유": r, "불만유형": c, "세부 해지사유 및 불만 내용": d,
@@ -105,6 +105,8 @@ if st.button("💾 저장 후 다음", type="primary", use_container_width=True)
         "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     save_result(data)
-    st.toast(f"✅ 저장 완료: {row.get('상호')}", icon="💾")
-    time.sleep(0.5)
+    
+    # 팝업 알림 (Toast) 및 리로드
+    st.toast(f"✅ 저장되었습니다. [{row.get('상호')}]", icon="💾")
+    time.sleep(0.7)
     st.rerun()
