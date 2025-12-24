@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 from storage import load_targets, load_results
 
 st.set_page_config(page_title="현황 모니터링", layout="wide")
@@ -18,7 +19,7 @@ if targets.empty:
     st.stop()
 
 # =========================
-# 전처리 (nan 제거 + 지사명 정규화)
+# 전처리
 # =========================
 targets = targets.dropna(subset=["관리지사", "계약번호"])
 results = results.dropna(subset=["관리지사", "계약번호"])
@@ -30,47 +31,30 @@ targets["계약번호"] = targets["계약번호"].astype(str)
 results["계약번호"] = results["계약번호"].astype(str)
 
 # =========================
-# 🔹 사이드바 필터 (버튼식)
+# 🔹 사이드바 필터
 # =========================
 st.sidebar.header("🔎 필터")
 
-# 관리지사 버튼 (고정 순서)
 available_branches = [
     b for b in BRANCH_ORDER
     if b in targets["관리지사표시"].unique()
 ]
 
-selected_branch = st.sidebar.radio(
-    "관리지사",
-    ["전체"] + available_branches
-)
+selected_branch = st.sidebar.radio("관리지사", ["전체"] + available_branches)
 
-if selected_branch != "전체":
-    targets_f = targets[targets["관리지사표시"] == selected_branch]
-    results_f = results[results["관리지사표시"] == selected_branch]
-else:
-    targets_f = targets.copy()
-    results_f = results.copy()
+targets_f = targets if selected_branch == "전체" else targets[targets["관리지사표시"] == selected_branch]
+results_f = results if selected_branch == "전체" else results[results["관리지사표시"] == selected_branch]
 
-# 담당자 버튼 (지사 선택에 따라 동적)
 if "담당자" in targets_f.columns:
-    owners = sorted(
-        targets_f["담당자"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-
-    selected_owner = st.sidebar.radio(
-        "담당자",
-        ["전체"] + owners
-    )
-
-    if selected_owner != "전체":
-        targets_f = targets_f[targets_f["담당자"] == selected_owner]
-        results_f = results_f[results_f["담당자"] == selected_owner]
+    owners = sorted(targets_f["담당자"].dropna().unique().tolist())
 else:
-    selected_owner = "전체"
+    owners = []
+
+selected_owner = st.sidebar.radio("담당자", ["전체"] + owners)
+
+if selected_owner != "전체":
+    targets_f = targets_f[targets_f["담당자"] == selected_owner]
+    results_f = results_f[results_f["담당자"] == selected_owner]
 
 # =========================
 # KPI 계산
@@ -78,27 +62,46 @@ else:
 total_targets = len(targets_f)
 processed_contracts = results_f["계약번호"].unique()
 processed_count = len(processed_contracts)
-unprocessed_count = total_targets - processed_count
+unprocessed_count = max(total_targets - processed_count, 0)
+
 progress_rate = round((processed_count / total_targets) * 100, 1) if total_targets else 0
+
+# 🔥 등록율 상태 아이콘
+def rate_icon(rate):
+    if rate >= 70:
+        return "🟢"
+    elif rate >= 40:
+        return "🟡"
+    return "🔴"
+
+rate_status = rate_icon(progress_rate)
+
+# 🔥 오늘 처리 건수
+today = date.today().strftime("%Y-%m-%d")
+today_count = (
+    results[results.get("해지_해지일자", results.get("해지일자","")) == today].shape[0]
+    if not results.empty else 0
+)
 
 # =========================
 # 🔹 KPI 카드
 # =========================
 st.markdown("## 📌 진행 현황 요약")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("업로드 대상", total_targets)
 c2.metric("등록 건수", processed_count)
 c3.metric("미등록 건수", unprocessed_count)
-c4.metric("등록율", f"{progress_rate}%")
+c4.metric("등록율", f"{progress_rate}% {rate_status}")
+c5.metric("오늘 처리 건수", today_count)
 
 st.divider()
 
 # =========================
-# 관리지사별 등록율 (선택 안 했을 때만)
+# 지사별 시각화 (전체 선택 시)
 # =========================
 if selected_branch == "전체":
-    st.markdown("## 🏢 관리지사별 등록율")
+    st.markdown("## 🏢 관리지사별 처리 현황")
 
     branch_target = (
         targets.groupby("관리지사표시")["계약번호"]
@@ -106,25 +109,27 @@ if selected_branch == "전체":
         .reindex(available_branches)
     )
 
-    branch_result = (
+    branch_done = (
         results.groupby("관리지사표시")["계약번호"]
         .nunique()
         .reindex(available_branches)
     )
 
-    branch_status = pd.concat(
-        [branch_target, branch_result],
-        axis=1
-    ).fillna(0)
+    summary = pd.concat([branch_target, branch_done], axis=1).fillna(0)
+    summary.columns = ["대상건수", "등록건수"]
+    summary["미등록건수"] = summary["대상건수"] - summary["등록건수"]
+    summary["미등록율(%)"] = (summary["미등록건수"] / summary["대상건수"] * 100).round(1)
+    summary["상태"] = summary["미등록율(%)"].apply(rate_icon)
 
-    branch_status.columns = ["업로드건수", "등록건수"]
-    branch_status["미등록건수"] = branch_status["업로드건수"] - branch_status["등록건수"]
-    branch_status["등록율(%)"] = (
-        branch_status["등록건수"] / branch_status["업로드건수"] * 100
-    ).round(1)
+    # 🔹 막대그래프 (건수 가독성)
+    st.subheader("📊 지사별 대상 / 등록 / 미등록 건수")
+    st.bar_chart(summary[["대상건수", "등록건수", "미등록건수"]])
 
-    st.bar_chart(branch_status["등록율(%)"])
-    st.dataframe(branch_status.reset_index(), use_container_width=True)
+    st.subheader("📉 지사별 미등록율(%)")
+    st.bar_chart(summary["미등록율(%)"])
+
+    st.subheader("📋 지사별 상세 현황")
+    st.dataframe(summary.reset_index(), use_container_width=True)
 
 st.divider()
 
@@ -141,7 +146,9 @@ if pw != "3867":
 
 st.success("관리자 인증 완료")
 
+# =========================
 # 미등록 대상
+# =========================
 st.markdown("### 🚨 미등록 대상 목록")
 
 unprocessed = targets_f[
@@ -150,7 +157,6 @@ unprocessed = targets_f[
 
 st.dataframe(unprocessed, use_container_width=True)
 
-# 다운로드
 csv = unprocessed.to_csv(index=False).encode("utf-8-sig")
 st.download_button(
     label="📥 미등록 대상 다운로드",
