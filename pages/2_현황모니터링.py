@@ -30,6 +30,9 @@ results["관리지사표시"] = results["관리지사"].astype(str).str.replace(
 targets["계약번호"] = targets["계약번호"].astype(str)
 results["계약번호"] = results["계약번호"].astype(str)
 
+# 🔥 등록 완료 기준: 해지사유가 있는 건만
+registered_results = results.dropna(subset=["해지사유"])
+
 # =========================
 # 🔹 사이드바 필터
 # =========================
@@ -43,7 +46,7 @@ available_branches = [
 selected_branch = st.sidebar.radio("관리지사", ["전체"] + available_branches)
 
 targets_f = targets if selected_branch == "전체" else targets[targets["관리지사표시"] == selected_branch]
-results_f = results if selected_branch == "전체" else results[results["관리지사표시"] == selected_branch]
+results_f = registered_results if selected_branch == "전체" else registered_results[registered_results["관리지사표시"] == selected_branch]
 
 if "담당자" in targets_f.columns:
     owners = sorted(targets_f["담당자"].dropna().unique().tolist())
@@ -57,16 +60,17 @@ if selected_owner != "전체":
     results_f = results_f[results_f["담당자"] == selected_owner]
 
 # =========================
-# KPI 계산
+# KPI 계산 (등록 기준 반영)
 # =========================
 total_targets = len(targets_f)
-processed_contracts = results_f["계약번호"].unique()
-processed_count = len(processed_contracts)
-unprocessed_count = max(total_targets - processed_count, 0)
 
-progress_rate = round((processed_count / total_targets) * 100, 1) if total_targets else 0
+registered_contracts = results_f["계약번호"].unique()
+registered_count = len(registered_contracts)
 
-# 🔥 등록율 상태 아이콘
+unregistered_count = max(total_targets - registered_count, 0)
+progress_rate = round((registered_count / total_targets) * 100, 1) if total_targets else 0
+
+# 상태 아이콘
 def rate_icon(rate):
     if rate >= 70:
         return "🟢"
@@ -76,29 +80,31 @@ def rate_icon(rate):
 
 rate_status = rate_icon(progress_rate)
 
-# 🔥 오늘 처리 건수
+# 오늘 등록 건수 (해지사유 기준)
 today = date.today().strftime("%Y-%m-%d")
 today_count = (
-    results[results.get("해지_해지일자", results.get("해지일자","")) == today].shape[0]
-    if not results.empty else 0
+    registered_results[
+        registered_results.get("해지_해지일자", registered_results.get("해지일자", "")) == today
+    ].shape[0]
+    if not registered_results.empty else 0
 )
 
 # =========================
-# 🔹 KPI 카드
+# KPI 카드
 # =========================
 st.markdown("## 📌 진행 현황 요약")
 
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("업로드 대상", total_targets)
-c2.metric("등록 건수", processed_count)
-c3.metric("미등록 건수", unprocessed_count)
+c2.metric("등록 건수", registered_count)
+c3.metric("미등록 건수", unregistered_count)
 c4.metric("등록율", f"{progress_rate}% {rate_status}")
-c5.metric("오늘 처리 건수", today_count)
+c5.metric("오늘 등록 건수", today_count)
 
 st.divider()
 
 # =========================
-# 지사별 시각화 (전체 선택 시)
+# 지사별 시각화 (정렬 적용)
 # =========================
 if selected_branch == "전체":
     st.markdown("## 🏢 관리지사별 처리 현황")
@@ -110,7 +116,7 @@ if selected_branch == "전체":
     )
 
     branch_done = (
-        results.groupby("관리지사표시")["계약번호"]
+        registered_results.groupby("관리지사표시")["계약번호"]
         .nunique()
         .reindex(available_branches)
     )
@@ -121,13 +127,15 @@ if selected_branch == "전체":
     summary["미등록율(%)"] = (summary["미등록건수"] / summary["대상건수"] * 100).round(1)
     summary["상태"] = summary["미등록율(%)"].apply(rate_icon)
 
-    # 🔹 막대그래프 (건수 가독성)
+    # 막대그래프 (건수)
     st.subheader("📊 지사별 대상 / 등록 / 미등록 건수")
     st.bar_chart(summary[["대상건수", "등록건수", "미등록건수"]])
 
+    # 미등록율
     st.subheader("📉 지사별 미등록율(%)")
     st.bar_chart(summary["미등록율(%)"])
 
+    # 상세 테이블
     st.subheader("📋 지사별 상세 현황")
     st.dataframe(summary.reset_index(), use_container_width=True)
 
@@ -147,20 +155,32 @@ if pw != "3867":
 st.success("관리자 인증 완료")
 
 # =========================
-# 미등록 대상
+# 🟢 등록 완료 대상
 # =========================
-st.markdown("### 🚨 미등록 대상 목록")
+st.markdown("### 🟢 등록 완료 대상 목록")
 
-unprocessed = targets_f[
-    ~targets_f["계약번호"].isin(processed_contracts)
+registered_list = targets_f[
+    targets_f["계약번호"].isin(registered_contracts)
 ]
 
-st.dataframe(unprocessed, use_container_width=True)
+st.dataframe(registered_list, use_container_width=True)
 
-csv = unprocessed.to_csv(index=False).encode("utf-8-sig")
+# =========================
+# 🔴 미등록 대상
+# =========================
+st.markdown("### 🔴 미등록 대상 목록")
+
+unregistered = targets_f[
+    ~targets_f["계약번호"].isin(registered_contracts)
+]
+
+st.dataframe(unregistered, use_container_width=True)
+
+# 다운로드 (미등록 대상)
+csv = unregistered.to_csv(index=False).encode("utf-8-sig")
 st.download_button(
     label="📥 미등록 대상 다운로드",
     data=csv,
-    file_name="unprocessed_targets.csv",
+    file_name="unregistered_targets.csv",
     mime="text/csv"
 )
