@@ -18,12 +18,12 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.copy()
 
-    # 🔹 담당자 통일
+    # 담당자 통일
     for col in ["이름(담당자)", "구역담당자"]:
         if col in df.columns and "담당자" not in df.columns:
             df["담당자"] = df[col]
 
-    # 🔹 상호 통일
+    # 상호 통일
     if "상호" not in df.columns:
         for alt in ["상호명", "업체명", "고객명"]:
             if alt in df.columns:
@@ -58,13 +58,17 @@ def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # =========================
-# 데이터 로드
+# 데이터 로드 / 저장
 # =========================
 def load_targets():
     if TARGET_FILE.exists():
         df = pd.read_csv(TARGET_FILE)
         return normalize_columns(df)
     return pd.DataFrame()
+
+def save_targets(df: pd.DataFrame):
+    df = normalize_columns(df)
+    df.to_csv(TARGET_FILE, index=False)
 
 def load_results():
     if RESULT_FILE.exists():
