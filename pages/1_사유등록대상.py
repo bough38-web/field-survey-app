@@ -1,147 +1,225 @@
 import streamlit as st
 import pandas as pd
+import time
 from datetime import date
 from storage import load_targets, load_results, save_result, load_reason_map
 
-st.set_page_config(page_title="사유등록대상", layout="wide")
-st.title("📝 사유 등록 대상")
+# ==========================================
+# 1. 페이지 설정 및 스타일링 (고급화)
+# ==========================================
+st.set_page_config(page_title="사유 등록 및 조치", layout="wide", page_icon="📝")
 
-BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양주", "강릉", "원주"]
+# 커스텀 CSS: 카드 디자인, 폰트, 버튼 스타일
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #f8fafc;
+    }
+    .stContainer {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1rem;
+    }
+    [data-testid="stHeader"] {
+        background-color: #f8fafc;
+    }
+    h1, h2, h3 {
+        font-family: 'Pretendard', sans-serif;
+        color: #1e293b;
+    }
+    .info-label {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 0.2rem;
+    }
+    .info-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #0f172a;
+    }
+    /* 저장 버튼 강조 */
+    div.stButton > button:first-child {
+        background-color: #2563eb;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #1d4ed8;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+    }
+</style>
+""", unsafe_allow_html=True)
 
-st.info("📢 정지처리계획입니다. 2025-12-31일까지 등록해 주세요.")
+st.title("📝 사유 등록 및 조치")
+st.markdown("조사 대상 고객의 **해지 사유** 및 **불만 내용**을 입력하는 페이지입니다.")
 
-# =========================
-# 1. 데이터 로드 및 초기화
-# =========================
+# ==========================================
+# 2. 데이터 로드 및 전처리
+# ==========================================
 targets = load_targets()
 results = load_results()
 
-# 업로드된 대상이 아예 없는 경우 처리
+# 초기 데이터 검증
 if targets.empty:
-    st.warning("⚠️ 아직 업로드된 조사 대상이 없습니다. '조사 대상 업로드' 메뉴를 먼저 이용해주세요.")
+    st.warning("⚠️ 업로드된 조사 대상 데이터가 없습니다. '조사 대상 업로드' 메뉴를 먼저 이용해주세요.")
     st.stop()
 
-# '계약번호' 컬럼을 문자열로 통일 (대상 데이터)
+# 계약번호 문자열 변환 (안전 장치)
 if "계약번호" in targets.columns:
     targets["계약번호"] = targets["계약번호"].astype(str)
 
-# '계약번호' 컬럼을 문자열로 통일 (결과 데이터)
 if not results.empty and "계약번호" in results.columns:
     results["계약번호"] = results["계약번호"].astype(str)
     registered_contracts = results[results["해지사유"].notna()]["계약번호"].unique()
 else:
     registered_contracts = []
 
-# 미등록 대상 필터링
+# 미처리 대상 필터링
 pending = targets[~targets["계약번호"].isin(registered_contracts)]
 
+# ==========================================
+# 3. 진행 상황 (Progress Bar)
+# ==========================================
+total_cnt = len(targets)
+done_cnt = len(registered_contracts)
+pending_cnt = len(pending)
+progress = done_cnt / total_cnt if total_cnt > 0 else 0
+
+col_kpi1, col_kpi2 = st.columns([3, 1])
+with col_kpi1:
+    st.progress(progress)
+with col_kpi2:
+    st.caption(f"진행률: **{progress*100:.1f}%** ({done_cnt}/{total_cnt}) | 잔여: **{pending_cnt}건**")
+
 if pending.empty:
-    st.success("🎉 모든 대상이 등록 완료되었습니다! 수고하셨습니다.")
+    st.success("🎉 모든 대상이 처리되었습니다! 수고하셨습니다.")
     st.stop()
 
-# =========================
-# 2. 사이드바 필터
-# =========================
+# ==========================================
+# 4. 사이드바 필터 (계층형 구조)
+# ==========================================
 if "관리지사" in pending.columns:
     pending["관리지사표시"] = pending["관리지사"].str.replace("지사", "").str.strip()
 else:
     pending["관리지사표시"] = "미지정"
 
-st.sidebar.header("🔎 필터")
+st.sidebar.header("🔍 작업 대상 필터")
 
-# 지사 필터
+# 1) 지사 선택
+BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양주", "강릉", "원주"]
 available_branches = [b for b in BRANCH_ORDER if b in pending["관리지사표시"].unique()]
 other_branches = [b for b in pending["관리지사표시"].unique() if b not in BRANCH_ORDER]
 branch_options = ["전체"] + available_branches + other_branches
 
-branch = st.sidebar.radio("관리지사", branch_options)
+branch = st.sidebar.selectbox("관리지사 선택", branch_options) # 라디오 -> 셀렉트박스로 변경하여 공간 절약
 
 if branch != "전체":
     pending = pending[pending["관리지사표시"] == branch]
 
-# 담당자 필터
+# 2) 담당자 선택
 if "담당자" in pending.columns:
     owners = sorted(pending["담당자"].dropna().unique().tolist())
-    owner = st.sidebar.radio("담당자", ["전체"] + owners)
+    owner = st.sidebar.selectbox("담당자 선택", ["전체"] + owners) # 셀렉트박스로 변경
 
     if owner != "전체":
         pending = pending[pending["담당자"] == owner]
 
-# =========================
-# 3. 대상 선택
-# =========================
+# ==========================================
+# 5. 작업 대상 선택 및 정보 표시
+# ==========================================
+st.markdown("---")
+
+# 작업 대상 선택창
 if pending.empty:
-    st.warning("조건에 맞는 대상이 없습니다.")
+    st.warning("선택한 조건에 맞는 대상이 없습니다.")
     st.stop()
 
-idx = st.selectbox(
-    "사유 등록 대상 선택",
-    pending.index,
-    format_func=lambda i: f"{pending.loc[i, '계약번호']} | {pending.loc[i, '상호']}"
-)
+col_sel1, col_sel2 = st.columns([1, 2])
+with col_sel1:
+    st.info(f"💡 현재 조건 대기 건수: **{len(pending)}건**")
+
+with col_sel2:
+    # Selectbox 가독성 향상
+    idx = st.selectbox(
+        "작업할 대상을 선택하세요",
+        pending.index,
+        format_func=lambda i: f"[{pending.loc[i, '관리지사표시']}] {pending.loc[i, '상호']} ({pending.loc[i, '계약번호']})"
+    )
 row = pending.loc[idx]
 
-# =========================
-# 4. 입력 폼
-# =========================
-st.markdown("### 🏢 기본 정보")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.text_input("관리지사", row.get("관리지사", ""), disabled=True)
-with col2:
-    st.text_input("계약번호", row.get("계약번호", ""), disabled=True)
-with col3:
-    st.text_input("상호", row.get("상호", ""), disabled=True)
-with col4:
-    st.text_input("담당자", row.get("담당자", ""), disabled=True)
+# --- [카드 1] 고객 기본 정보 ---
+with st.container():
+    st.markdown("### 🏢 고객 기본 정보")
+    
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(f"<div class='info-label'>관리지사</div><div class='info-value'>{row.get('관리지사', '-')}</div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='info-label'>계약번호</div><div class='info-value'>{row.get('계약번호', '-')}</div>", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"<div class='info-label'>상호</div><div class='info-value'>{row.get('상호', '-')}</div>", unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"<div class='info-label'>담당자</div><div class='info-value'>{row.get('담당자', '-')}</div>", unsafe_allow_html=True)
 
-st.markdown("---")
-st.markdown("### ✍️ 조치 내용 입력")
-
+# ==========================================
+# 6. 입력 폼 (Action Area)
+# ==========================================
 # 해지사유 데이터 로드
 reason_map = load_reason_map()
-
 if reason_map.empty:
-    st.error("❌ 'reason_map.csv' 파일이 없거나 비어 있습니다.")
+    st.error("❌ 'reason_map.csv' 파일이 없습니다.")
     st.stop()
 
-# 사유 선택
-c1, c2 = st.columns(2)
-with c1:
-    reason = st.selectbox("해지사유", sorted(reason_map["해지사유"].unique()))
-with c2:
-    complaints = reason_map[reason_map["해지사유"] == reason]["불만유형"].unique()
-    complaint = st.selectbox("불만유형", complaints)
+# --- [카드 2] 조치 내용 입력 ---
+with st.container():
+    st.markdown("### ✍️ 조치 내용 입력")
+    
+    # 1행: 사유 및 불만유형
+    rc1, rc2 = st.columns(2)
+    with rc1:
+        reason = st.selectbox("해지사유 (필수)", sorted(reason_map["해지사유"].unique()))
+    with rc2:
+        complaints = reason_map[reason_map["해지사유"] == reason]["불만유형"].unique()
+        complaint = st.selectbox("불만유형 (필수)", complaints)
 
-# [수정됨] 항상 입력 가능하도록 변경 (disabled 옵션 삭제)
-detail = st.text_area(
-    "세부 해지사유 및 불만 내용",
-    height=100,
-    placeholder="구체적인 내용을 자유롭게 작성해주세요."
-)
+    # 2행: 세부 내용 (항상 활성화)
+    detail = st.text_area(
+        "세부 해지사유 및 불만 내용",
+        height=120,
+        placeholder="고객의 구체적인 불만 사항이나 해지 사유를 상세히 기록해주세요.\n(예: 요금 인상에 대한 불만으로 타사 이동 고려 중)"
+    )
 
-# 날짜 및 비고
-c3, c4 = st.columns(2)
-with c3:
-    # 업로드된 해지일자가 있으면 가져오고, 없으면 오늘 날짜
-    try:
-        if pd.notna(row.get("해지_해지일자")):
-            default_date = pd.to_datetime(row.get("해지_해지일자")).date()
-        else:
+    # 3행: 날짜 및 비고
+    rc3, rc4 = st.columns(2)
+    with rc3:
+        try:
+            if pd.notna(row.get("해지_해지일자")):
+                default_date = pd.to_datetime(row.get("해지_해지일자")).date()
+            else:
+                default_date = date.today()
+        except:
             default_date = date.today()
-    except:
-        default_date = date.today()
-        
-    cancel_date = st.date_input("해지(예정) 일자", value=default_date)
+            
+        cancel_date = st.date_input("해지(예정) 일자", value=default_date)
 
-with c4:
-    remark = st.text_area("비고", height=100)
+    with rc4:
+        remark = st.text_area("비고", height=80, placeholder="기타 특이사항 입력")
 
-# =========================
-# 5. 저장 로직
-# =========================
-st.markdown("---")
-if st.button("💾 저장 후 다음", type="primary", use_container_width=True):
+# ==========================================
+# 7. 저장 및 알림 (Toast)
+# ==========================================
+st.markdown("###") # 여백
+
+if st.button("💾 저장 후 다음 (Save & Next)", type="primary", use_container_width=True):
+    # 1. 데이터 패키징
     save_data = {
         "관리지사": row.get("관리지사", ""),
         "계약번호": row.get("계약번호", ""),
@@ -155,6 +233,10 @@ if st.button("💾 저장 후 다음", type="primary", use_container_width=True)
         "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
+    # 2. 저장 실행
     save_result(save_data)
-    st.success("✅ 저장되었습니다! 다음 대상으로 이동합니다.")
+    
+    # 3. 알림 (Toast) 및 리로드
+    st.toast(f"✅ [{row.get('상호')}] 저장 완료! 다음 건으로 이동합니다.", icon="💾")
+    time.sleep(0.7) # 사용자가 알림을 볼 수 있도록 0.7초 대기
     st.rerun()
