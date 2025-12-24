@@ -39,12 +39,6 @@ st.markdown("""
         font-weight: 600;
         color: #0f172a;
     }
-    /* 중요 정보(해지일자 등) 강조 */
-    .highlight-value {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #ef4444; /* Red color for termination date */
-    }
     div.stButton > button:first-child {
         background-color: #2563eb;
         color: white;
@@ -153,25 +147,14 @@ with col_sel2:
 row = pending.loc[idx]
 
 # ==========================================
-# 6. 고객 정보 및 입력 폼 (수정됨)
+# 6. 고객 정보 및 입력 폼
 # ==========================================
 
-# --- [카드 1] 고객 기본 정보 (해지일자 고정 표시) ---
+# --- [카드 1] 고객 기본 정보 ---
 with st.container():
     st.markdown("### 🏢 고객 기본 정보")
     
-    # 원본 파일의 해지일자 가져오기 (없으면 '-')
-    origin_cancel_date = row.get("해지_해지일자")
-    if pd.isna(origin_cancel_date):
-        origin_cancel_date = "-"
-    else:
-        # 날짜 형식만 깔끔하게 표시
-        try:
-            origin_cancel_date = pd.to_datetime(origin_cancel_date).strftime("%Y-%m-%d")
-        except:
-            pass
-
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(f"<div class='info-label'>관리지사</div><div class='info-value'>{row.get('관리지사', '-')}</div>", unsafe_allow_html=True)
     with c2:
@@ -180,11 +163,8 @@ with st.container():
         st.markdown(f"<div class='info-label'>상호</div><div class='info-value'>{row.get('상호', '-')}</div>", unsafe_allow_html=True)
     with c4:
         st.markdown(f"<div class='info-label'>담당자</div><div class='info-value'>{row.get('담당자', '-')}</div>", unsafe_allow_html=True)
-    with c5:
-        # [수정] 원본 해지일자를 여기에 고정 (수정 불가)
-        st.markdown(f"<div class='info-label'>해지_해지일자</div><div class='highlight-value'>{origin_cancel_date}</div>", unsafe_allow_html=True)
 
-# --- [카드 2] 조치 내용 입력 (사유 등록 일자 적용) ---
+# --- [카드 2] 조치 내용 입력 ---
 reason_map = load_reason_map()
 if reason_map.empty:
     st.error("❌ 'reason_map.csv' 파일이 없습니다.")
@@ -208,11 +188,26 @@ with st.container():
         placeholder="고객의 구체적인 불만 사항이나 해지 사유를 상세히 기록해주세요."
     )
 
-    # 3행: 사유 등록 일자(Today) 및 비고
+    # 3행: 해지(예정)일자 (FIXED) 및 비고
     rc3, rc4 = st.columns(2)
     with rc3:
-        # [수정] 해지(예정)일자 -> 사유 등록 일자 (기본값: 오늘)
-        reg_date = st.date_input("사유 등록 일자", value=date.today(), help="실제 사유를 등록/처리하는 일자입니다.")
+        # ─────────────────────────────────────────────────────────────
+        # [수정] 업로드된 '해지_해지일자' 값을 가져와서 고정(FIX) 처리
+        # ─────────────────────────────────────────────────────────────
+        try:
+            if pd.notna(row.get("해지_해지일자")):
+                fix_date = pd.to_datetime(row.get("해지_해지일자")).date()
+            else:
+                fix_date = date.today() # 값이 없으면 오늘 날짜
+        except:
+            fix_date = date.today()
+            
+        # disabled=True를 사용하여 사용자가 수정하지 못하게 '픽스' 적용
+        cancel_date = st.date_input(
+            "해지(예정) 일자 (파일 원본값 고정)", 
+            value=fix_date, 
+            disabled=True 
+        )
 
     with rc4:
         remark = st.text_area("비고", height=80, placeholder="기타 특이사항 입력")
@@ -233,9 +228,8 @@ if st.button("💾 저장 후 다음 (Save & Next)", type="primary", use_contain
         "불만유형": complaint,
         "세부 해지사유 및 불만 내용": detail,
         
-        # [수정] 데이터 저장 방식 변경
-        "해지_해지일자": row.get("해지_해지일자", ""), # 원본 엑셀 값 그대로 보존
-        "사유등록일자": reg_date.strftime("%Y-%m-%d"), # 입력한 등록일자 저장
+        # 고정된 날짜 값 저장
+        "해지_해지일자": cancel_date.strftime("%Y-%m-%d"), 
         
         "비고": remark,
         "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
