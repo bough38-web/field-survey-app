@@ -81,7 +81,7 @@ reason = st.selectbox("해지사유", reasons)
 complaints = reason_map[reason_map["해지사유"]==reason]["불만유형"].unique()
 complaint = st.selectbox("불만유형", complaints)
 
-detail = st.text_area("세부내용", disabled=(complaint=="불만없음"))
+detail = st.text_area("세부 해지사유 및 불만 내용", disabled=(complaint=="불만없음"))
 cancel_date = st.date_input("해지일자", value=date.today())
 remark = st.text_area("비고")
 
@@ -96,7 +96,7 @@ if st.button("💾 저장 후 다음"):
         "담당자": row.get("담당자",""),
         "해지사유": reason,
         "불만유형": complaint,
-        "세부내용": detail,
+        "세부 해지사유 및 불만 내용": detail,
         "해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
     })
