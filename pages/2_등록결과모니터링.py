@@ -1,81 +1,86 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
-from storage import load_targets, load_results
+from storage import load_results
 
-st.set_page_config(page_title="등록결과 모니터링", layout="wide")
-st.title("📊 등록결과 모니터링")
+st.set_page_config(page_title="등록 결과 모니터링", layout="wide")
+st.title("📊 등록 결과 모니터링")
 
-BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양주", "강릉", "원주"]
-
-targets = load_targets()
+# ==========================================
+# 1. 데이터 로드 및 오류 방지 (핵심 수정)
+# ==========================================
 results = load_results()
 
-targets["계약번호"] = targets["계약번호"].astype(str)
-results["계약번호"] = results["계약번호"].astype(str)
+# [수정] 데이터가 아예 없는 경우 안내 문구 표시 후 중단
+if results.empty:
+    st.info("📭 아직 등록된 조치 결과가 없습니다. '사유 등록 대상' 메뉴에서 조치를 입력해주세요.")
+    st.stop()
 
-targets["관리지사표시"] = targets["관리지사"].str.replace("지사","").str.strip()
-results["관리지사표시"] = results["관리지사"].str.replace("지사","").str.strip()
+# [수정] '계약번호' 컬럼이 존재할 때만 문자열 변환 수행 (KeyError 방지)
+if "계약번호" in results.columns:
+    results["계약번호"] = results["계약번호"].astype(str)
 
-registered = results[results["해지사유"].notna()]
+# ==========================================
+# 2. 현황 요약 (Metrics)
+# ==========================================
+col1, col2, col3 = st.columns(3)
 
-# =========================
-# KPI
-# =========================
-total = targets["계약번호"].nunique()
-done = registered["계약번호"].nunique()
-remain = total - done
-rate = round(done / total * 100, 1) if total else 0
+total_count = len(results)
 
-today = date.today().strftime("%Y-%m-%d")
-today_cnt = (registered["해지_해지일자"] == today).sum()
+# 지사별 최다 등록 지사 확인
+if "관리지사" in results.columns:
+    top_branch = results["관리지사"].value_counts().idxmax()
+else:
+    top_branch = "-"
 
-c1,c2,c3,c4,c5 = st.columns(5)
-c1.metric("대상", total)
-c2.metric("등록", done)
-c3.metric("미등록", remain)
-c4.metric("등록율", f"{rate}%")
-c5.metric("오늘 등록", today_cnt)
+# 최근 등록일 확인
+if "처리일시" in results.columns:
+    last_update = pd.to_datetime(results["처리일시"]).max().strftime("%Y-%m-%d %H:%M")
+else:
+    last_update = "-"
 
-# =========================
-# 지사별 현황
-# =========================
-st.subheader("🏢 지사별 대상 vs 등록")
+with col1:
+    st.metric("총 등록 건수", f"{total_count}건")
+with col2:
+    st.metric("최다 등록 지사", top_branch)
+with col3:
+    st.metric("최근 업데이트", last_update)
 
-branch_target = targets.groupby("관리지사표시")["계약번호"].nunique().reindex(BRANCH_ORDER, fill_value=0)
-branch_done = registered.groupby("관리지사표시")["계약번호"].nunique().reindex(BRANCH_ORDER, fill_value=0)
+st.markdown("---")
 
-summary = pd.DataFrame({
-    "대상건수": branch_target,
-    "등록건수": branch_done
-})
-summary["등록율(%)"] = (summary["등록건수"] / summary["대상건수"] * 100).round(1)
+# ==========================================
+# 3. 데이터 필터링 및 조회
+# ==========================================
+st.subheader("📋 등록 내역 상세")
 
-st.bar_chart(summary[["대상건수","등록건수"]])
-st.dataframe(summary.reset_index(), use_container_width=True)
+# 검색 기능 (계약번호 또는 상호)
+search_query = st.text_input("🔍 검색 (계약번호 또는 상호)", placeholder="검색어를 입력하세요...")
 
-# =========================
-# 담당자 미등록
-# =========================
-st.subheader("👤 담당자별 미등록 건수")
-
-unreg = targets[~targets["계약번호"].isin(registered["계약번호"])]
-owner_unreg = unreg.groupby("담당자")["계약번호"].count().sort_values(ascending=False)
-
-st.bar_chart(owner_unreg)
-
-# =========================
-# 관리자
-# =========================
-st.divider()
-pw = st.text_input("관리자 비밀번호", type="password")
-
-if pw == "3867":
-    st.subheader("🟢 등록 완료 대상 (수정 가능)")
-    edited = st.data_editor(
-        registered.fillna("").drop(columns=["관리지사표시"], errors="ignore"),
-        use_container_width=True
+if search_query:
+    # 문자열로 변환 후 검색
+    mask = (
+        results["계약번호"].astype(str).str.contains(search_query) | 
+        results["상호"].astype(str).str.contains(search_query)
     )
-    if st.button("저장"):
-        edited.to_csv("storage/survey_results.csv", index=False)
-        st.success("저장 완료")
+    filtered_df = results[mask]
+else:
+    filtered_df = results
+
+# 필터링된 결과 보여주기
+st.dataframe(
+    filtered_df, 
+    use_container_width=True,
+    hide_index=True
+)
+
+# ==========================================
+# 4. 다운로드 기능
+# ==========================================
+csv = filtered_df.to_csv(index=False).encode('utf-8-sig') # 한글 깨짐 방지 인코딩
+
+st.download_button(
+    label="📥 조회 결과 다운로드 (CSV)",
+    data=csv,
+    file_name="survey_results.csv",
+    mime="text/csv",
+    type="primary"
+)
