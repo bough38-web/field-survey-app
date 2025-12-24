@@ -1,136 +1,105 @@
 import streamlit as st
 from datetime import date
-from storage import load_targets, save_result, load_reason_map, load_results
+from storage import load_targets, load_results, save_result, load_reason_map
 
-BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양주", "강릉", "원주"]
+BRANCH_ORDER = ["중앙","강북","서대문","고양","의정부","남양주","강릉","원주"]
 
-st.markdown(
-    """
-    ### 🚨 안내
-    **정지처리계획입니다.  
-    2025-12-31일까지 등록하여 주시기 바랍니다.**
-    """
-)
+st.set_page_config(page_title="조치 작성", layout="wide")
+st.title("✍️ 조치 작성")
 
 # =========================
-# 데이터 로드 및 전처리
+# 데이터 로드
 # =========================
-df = load_targets()
-df = df.dropna(subset=["관리지사", "계약번호", "상호"])
+targets = load_targets()
+results = load_results()
 
-df["관리지사표시"] = (
-    df["관리지사"]
-    .astype(str)
-    .str.replace("지사", "", regex=False)
-    .str.strip()
+# 오늘 처리 건수
+today = date.today().strftime("%Y-%m-%d")
+today_count = (
+    results[results["해지일자"] == today].shape[0]
+    if not results.empty and "해지일자" in results.columns
+    else 0
 )
 
+st.metric("📌 오늘 처리 건수", today_count)
+
 # =========================
-# 🔹 사이드바 버튼 필터
+# 미처리 대상만 남기기
 # =========================
-st.sidebar.header("🔎 필터")
+if not results.empty:
+    processed = results["계약번호"].astype(str).unique()
+    targets = targets[~targets["계약번호"].astype(str).isin(processed)]
 
-available_branches = [
-    b for b in BRANCH_ORDER
-    if b in df["관리지사표시"].unique()
-]
+targets = targets.dropna(subset=["관리지사","계약번호","상호"])
+targets["관리지사표시"] = targets["관리지사"].str.replace("지사","",regex=False).str.strip()
 
-selected_branch = st.sidebar.radio(
-    "관리지사",
-    ["전체"] + available_branches
-)
-
-df_f = df if selected_branch == "전체" else df[df["관리지사표시"] == selected_branch]
-
-# 🔑 담당자 필터 (표시명 통일)
-if "담당자" in df_f.columns:
-    owners = sorted(
-        df_f["담당자"]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
-else:
-    owners = []
-
-selected_owner = st.sidebar.radio(
-    "담당자",   # ✅ 표시명 통일
-    ["전체"] + owners
-)
-
-if selected_owner != "전체":
-    df_f = df_f[df_f["담당자"] == selected_owner]
-
-df_f = df_f.reset_index(drop=True)
-
-if df_f.empty:
-    st.warning("선택한 조건에 해당하는 대상이 없습니다.")
+if targets.empty:
+    st.success("🎉 모든 대상이 처리 완료되었습니다.")
     st.stop()
 
 # =========================
-# 조사 대상 선택
+# 사이드바 필터
 # =========================
-row = st.selectbox(
-    "조사 대상 선택",
-    df_f.index,
-    format_func=lambda i: f"{df_f.loc[i,'계약번호']} | {df_f.loc[i,'상호']}"
-)
-selected = df_f.loc[row]
+st.sidebar.header("🔎 필터")
+
+branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
+sel_branch = st.sidebar.radio("관리지사", ["전체"] + branches)
+df = targets if sel_branch=="전체" else targets[targets["관리지사표시"]==sel_branch]
+
+owners = sorted(df["담당자"].dropna().unique().tolist())
+sel_owner = st.sidebar.radio("담당자", ["전체"] + owners)
+if sel_owner!="전체":
+    df = df[df["담당자"]==sel_owner]
+
+df = df.reset_index(drop=True)
 
 # =========================
-# 기본 정보 (읽기 전용)
+# 대상 선택
 # =========================
-st.text_input("관리지사", selected["관리지사"], disabled=True)
-st.text_input("계약번호", selected["계약번호"], disabled=True)
-st.text_input("상호", selected["상호"], disabled=True)
-st.text_input("담당자", selected.get("담당자", ""), disabled=True)
+idx = st.selectbox(
+    "처리 대상 선택",
+    range(len(df)),
+    format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
+)
+row = df.loc[idx]
+
+# =========================
+# 기본 정보
+# =========================
+st.text_input("관리지사", row["관리지사"], disabled=True)
+st.text_input("계약번호", row["계약번호"], disabled=True)
+st.text_input("상호", row["상호"], disabled=True)
+st.text_input("담당자", row.get("담당자",""), disabled=True)
 
 # =========================
 # 해지사유 / 불만유형
 # =========================
 reason_map = load_reason_map()
+reasons = sorted(reason_map["해지사유"].unique())
+reason = st.selectbox("해지사유", reasons)
 
-reasons = sorted(reason_map["해지사유"].dropna().unique())
-cancel_reason = st.selectbox("해지사유", reasons)
+complaints = reason_map[reason_map["해지사유"]==reason]["불만유형"].unique()
+complaint = st.selectbox("불만유형", complaints)
 
-complaints = (
-    reason_map[reason_map["해지사유"] == cancel_reason]["불만유형"]
-    .dropna()
-    .unique()
-    .tolist()
-)
-
-complaint_type = st.selectbox("불만유형", complaints)
-
-detail = st.text_area(
-    "세부 해지사유 및 불만 내용",
-    disabled=(complaint_type == "불만없음")
-)
-
-cancel_date = st.date_input("해지_해지일자", value=date.today())
+detail = st.text_area("세부내용", disabled=(complaint=="불만없음"))
+cancel_date = st.date_input("해지일자", value=date.today())
 remark = st.text_area("비고")
 
 # =========================
-# 저장 (중복 방지)
+# 저장 → 자동 다음 이동
 # =========================
-if st.button("저장"):
-    results = load_results()
-
-    if not results.empty and selected["계약번호"] in results["계약번호"].astype(str).values:
-        st.error("이미 조치가 등록된 계약번호입니다.")
-        st.stop()
-
+if st.button("💾 저장 후 다음"):
     save_result({
-        "관리지사": selected["관리지사"],
-        "계약번호": selected["계약번호"],
-        "상호": selected["상호"],
-        "담당자": selected.get("담당자", ""),
-        "해지사유": cancel_reason,
-        "불만유형": complaint_type,
+        "관리지사": row["관리지사"],
+        "계약번호": row["계약번호"],
+        "상호": row["상호"],
+        "담당자": row.get("담당자",""),
+        "해지사유": reason,
+        "불만유형": complaint,
         "세부내용": detail,
-        "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
+        "해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
     })
 
-    st.success("조치 정보가 저장되었습니다.")
+    st.success("저장 완료! 다음 대상으로 이동합니다.")
+    st.experimental_rerun()
