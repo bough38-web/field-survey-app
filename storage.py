@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from filelock import FileLock # 동시성 제어
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "storage"
@@ -9,80 +10,97 @@ TARGET_FILE = DATA_DIR / "survey_targets.csv"
 RESULT_FILE = DATA_DIR / "survey_results.csv"
 REASON_FILE = BASE_DIR / "reason_map.csv"
 
+# 파일 동시 접근 방지를 위한 Lock 파일
+LOCK_FILE = DATA_DIR / "data.lock"
+
 # =========================
-# 컬럼 정규화 (담당자 / 상호)
+# 컬럼 정규화
 # =========================
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-
+    
     df = df.copy()
+    
+    # 1. 컬럼명 공백/특수문자 제거
+    df.columns = (
+        df.columns.astype(str)
+        .str.replace("\n", "")
+        .str.replace(" ", "")
+        .str.replace("_", "")
+        .str.strip()
+    )
 
-    # 담당자 통일
+    # 2. 담당자 컬럼 통일
     for col in ["이름(담당자)", "구역담당자"]:
         if col in df.columns and "담당자" not in df.columns:
             df["담당자"] = df[col]
 
-    # 상호 통일
+    # 3. 상호 컬럼 통일
     if "상호" not in df.columns:
         for alt in ["상호명", "업체명", "고객명"]:
             if alt in df.columns:
                 df["상호"] = df[alt]
                 break
         else:
-            df["상호"] = ""
+            df["상호"] = "" # 없으면 빈 값
 
+    # 중복 컬럼 제거
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
 # =========================
-# 🔥 결과 데이터 마이그레이션
-# =========================
-def migrate_results_schema(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return df
-
-    df = df.copy()
-
-    # 세부내용 → 신규 컬럼
-    if "세부내용" in df.columns:
-        if "세부 해지사유 및 불만 내용" not in df.columns:
-            df["세부 해지사유 및 불만 내용"] = df["세부내용"]
-        else:
-            df["세부 해지사유 및 불만 내용"] = (
-                df["세부 해지사유 및 불만 내용"]
-                .fillna(df["세부내용"])
-            )
-        df = df.drop(columns=["세부내용"])
-
-    return df
-
-# =========================
-# 데이터 로드 / 저장
+# 데이터 로드 / 저장 (Lock 적용)
 # =========================
 def load_targets():
     if TARGET_FILE.exists():
-        df = pd.read_csv(TARGET_FILE)
+        df = pd.read_csv(TARGET_FILE, dtype={"계약번호": str}) # 읽을 때 문자열로 강제
         return normalize_columns(df)
     return pd.DataFrame()
 
 def save_targets(df: pd.DataFrame):
     df = normalize_columns(df)
-    df.to_csv(TARGET_FILE, index=False)
+    if "계약번호" in df.columns:
+        df["계약번호"] = df["계약번호"].astype(str)
+    
+    with FileLock(str(LOCK_FILE)):
+        df.to_csv(TARGET_FILE, index=False)
 
 def load_results():
     if RESULT_FILE.exists():
-        df = pd.read_csv(RESULT_FILE)
-        df = migrate_results_schema(df)
-        df = normalize_columns(df)
-        df.to_csv(RESULT_FILE, index=False)  # 1회 정리
-        return df
+        # 읽을 때 계약번호는 무조건 문자열 처리
+        df = pd.read_csv(RESULT_FILE, dtype={"계약번호": str})
+        return normalize_columns(df)
     return pd.DataFrame()
 
 def save_result(row: dict):
-    df = load_results()
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    df.to_csv(RESULT_FILE, index=False)
+    """
+    데이터 저장 시 '계약번호'를 기준으로
+    이미 존재하면 수정(Update), 없으면 추가(Append)합니다.
+    """
+    with FileLock(str(LOCK_FILE)):
+        df = load_results()
+        
+        # 계약번호 문자열 변환
+        contract_id = str(row["계약번호"])
+        row["계약번호"] = contract_id
+        
+        if not df.empty and "계약번호" in df.columns:
+            # 기존 데이터 확인
+            idx = df[df["계약번호"] == contract_id].index
+            
+            if not idx.empty:
+                # Update: 기존 행 업데이트
+                for key, value in row.items():
+                    df.loc[idx[0], key] = value
+            else:
+                # Insert: 신규 행 추가
+                df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        else:
+            # 데이터가 아예 없을 때
+            df = pd.DataFrame([row])
+
+        df.to_csv(RESULT_FILE, index=False)
 
 def load_reason_map():
     if REASON_FILE.exists():
