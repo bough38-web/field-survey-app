@@ -43,7 +43,7 @@ st.markdown("""
     .highlight-value {
         font-size: 1.1rem;
         font-weight: 700;
-        color: #ef4444; /* Red color for termination date */
+        color: #ef4444;
     }
     div.stButton > button:first-child {
         background-color: #2563eb;
@@ -66,7 +66,7 @@ st.title("📝 사유 등록 및 조치")
 st.markdown("조사 대상 고객의 **해지 사유** 및 **불만 내용**을 입력하는 페이지입니다.")
 
 # ==========================================
-# 2. 데이터 로드 및 전처리
+# 2. 데이터 로드 및 전처리 (수정됨: .0 제거)
 # ==========================================
 targets = load_targets()
 results = load_results()
@@ -75,11 +75,12 @@ if targets.empty:
     st.warning("⚠️ 업로드된 조사 대상 데이터가 없습니다. '조사 대상 업로드' 메뉴를 먼저 이용해주세요.")
     st.stop()
 
+# [수정] 계약번호 문자열 변환 및 .0 제거 로직 적용
 if "계약번호" in targets.columns:
-    targets["계약번호"] = targets["계약번호"].astype(str)
+    targets["계약번호"] = targets["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
 
 if not results.empty and "계약번호" in results.columns:
-    results["계약번호"] = results["계약번호"].astype(str)
+    results["계약번호"] = results["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
     registered_contracts = results[results["해지사유"].notna()]["계약번호"].unique()
 else:
     registered_contracts = []
@@ -153,19 +154,18 @@ with col_sel2:
 row = pending.loc[idx]
 
 # ==========================================
-# 6. 고객 정보 및 입력 폼 (수정됨)
+# 6. 고객 정보 및 입력 폼
 # ==========================================
 
-# --- [카드 1] 고객 기본 정보 (해지일자 고정 표시) ---
+# --- [카드 1] 고객 기본 정보 ---
 with st.container():
     st.markdown("### 🏢 고객 기본 정보")
     
     # 원본 파일의 해지일자 가져오기 (없으면 '-')
-    origin_cancel_date = row.get("해지일자")
+    origin_cancel_date = row.get("해지_해지일자")
     if pd.isna(origin_cancel_date):
         origin_cancel_date = "-"
     else:
-        # 날짜 형식만 깔끔하게 표시
         try:
             origin_cancel_date = pd.to_datetime(origin_cancel_date).strftime("%Y-%m-%d")
         except:
@@ -181,10 +181,9 @@ with st.container():
     with c4:
         st.markdown(f"<div class='info-label'>담당자</div><div class='info-value'>{row.get('담당자', '-')}</div>", unsafe_allow_html=True)
     with c5:
-        # [수정] 원본 해지일자를 여기에 고정 (수정 불가)
         st.markdown(f"<div class='info-label'>원본 해지일자</div><div class='highlight-value'>{origin_cancel_date}</div>", unsafe_allow_html=True)
 
-# --- [카드 2] 조치 내용 입력 (사유 등록 일자 적용) ---
+# --- [카드 2] 조치 내용 입력 ---
 reason_map = load_reason_map()
 if reason_map.empty:
     st.error("❌ 'reason_map.csv' 파일이 없습니다.")
@@ -193,7 +192,6 @@ if reason_map.empty:
 with st.container():
     st.markdown("### ✍️ 조치 내용 입력")
     
-    # 1행: 사유 및 불만유형
     rc1, rc2 = st.columns(2)
     with rc1:
         reason = st.selectbox("해지사유 (필수)", sorted(reason_map["해지사유"].unique()))
@@ -201,19 +199,15 @@ with st.container():
         complaints = reason_map[reason_map["해지사유"] == reason]["불만유형"].unique()
         complaint = st.selectbox("불만유형 (필수)", complaints)
 
-    # 2행: 세부 내용
     detail = st.text_area(
         "세부 해지사유 및 불만 내용",
         height=120,
         placeholder="고객의 구체적인 불만 사항이나 해지 사유를 상세히 기록해주세요."
     )
 
-    # 3행: 사유 등록 일자(Today) 및 비고
     rc3, rc4 = st.columns(2)
     with rc3:
-        # [수정] 해지(예정)일자 -> 사유 등록 일자 (기본값: 오늘)
         reg_date = st.date_input("사유 등록 일자", value=date.today(), help="실제 사유를 등록/처리하는 일자입니다.")
-
     with rc4:
         remark = st.text_area("비고", height=80, placeholder="기타 특이사항 입력")
 
@@ -223,28 +217,22 @@ with st.container():
 st.markdown("###") 
 
 if st.button("💾 저장 후 다음 (Save & Next)", type="primary", use_container_width=True):
-    # 1. 데이터 패키징
     save_data = {
         "관리지사": row.get("관리지사", ""),
-        "계약번호": row.get("계약번호", ""),
+        "계약번호": row.get("계약번호", ""), # 여기도 자동으로 .0 제거된 값이 들어감
         "상호": row.get("상호", ""),
         "담당자": row.get("담당자", ""),
         "해지사유": reason,
         "불만유형": complaint,
         "세부 해지사유 및 불만 내용": detail,
-        
-        # [수정] 데이터 저장 방식 변경
-        "해지_해지일자": row.get("해지_해지일자", ""), # 원본 엑셀 값 그대로 보존
-        "사유등록일자": reg_date.strftime("%Y-%m-%d"), # 입력한 등록일자 저장
-        
+        "해지_해지일자": row.get("해지_해지일자", ""),
+        "사유등록일자": reg_date.strftime("%Y-%m-%d"),
         "비고": remark,
         "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
-    # 2. 저장 실행
     save_result(save_data)
     
-    # 3. 알림 및 리로드
     st.toast(f"✅ [{row.get('상호')}] 저장 완료! 다음 건으로 이동합니다.", icon="💾")
     time.sleep(0.7)
     st.rerun()
