@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from storage import load_targets, save_result
+from storage import load_targets, save_result, load_reason_map
 
 st.markdown(
     """
@@ -15,44 +15,49 @@ if df.empty:
     st.warning("조사 대상 데이터가 없습니다.")
     st.stop()
 
-# =========================
-# 🔹 사이드바 필터
-# =========================
-st.sidebar.header("🔎 필터")
-
-branches = ["전체"] + sorted(df["관리지사"].dropna().unique().tolist())
-selected_branch = st.sidebar.selectbox("관리지사", branches)
-
-filtered = df if selected_branch == "전체" else df[df["관리지사"] == selected_branch]
-
-owners = ["전체"] + sorted(filtered["담당자"].dropna().unique().tolist())
-selected_owner = st.sidebar.selectbox("담당자", owners)
-
-if selected_owner != "전체":
-    filtered = filtered[filtered["담당자"] == selected_owner]
-
-if filtered.empty:
-    st.warning("선택한 조건에 해당하는 데이터가 없습니다.")
-    st.stop()
-
-# =========================
-# 조사 대상 선택
-# =========================
 row = st.selectbox(
     "조사 대상 선택",
-    filtered.index,
-    format_func=lambda i: f"{filtered.loc[i,'계약번호']} | {filtered.loc[i,'상호']}"
+    df.index,
+    format_func=lambda i: f"{df.loc[i,'계약번호']} | {df.loc[i,'상호']}"
 )
+selected = df.loc[row]
 
-selected = filtered.loc[row]
-
-# =========================
-# 표시 영역
-# =========================
-st.text_input("관리지사", selected["관리지사"], disabled=True)
+# 기본 정보
+st.text_input("관리지사", selected.get("관리지사",""), disabled=True)
 st.text_input("계약번호", selected["계약번호"], disabled=True)
 st.text_input("상호", selected["상호"], disabled=True)
-st.text_input("담당자", selected.get("담당자", ""), disabled=True)
+
+# 해지사유 / 불만유형
+reason_map = load_reason_map()
+
+default_reason = selected.get("해지사유", "")
+default_complaint = selected.get("불만유형", "")
+default_detail = selected.get("세부내용", "")
+
+reasons = sorted(reason_map["해지사유"].unique())
+cancel_reason = st.selectbox(
+    "해지사유",
+    reasons,
+    index=reasons.index(default_reason) if default_reason in reasons else 0
+)
+
+complaints = (
+    reason_map[reason_map["해지사유"] == cancel_reason]["불만유형"]
+    .dropna().unique().tolist()
+)
+
+complaint_type = st.selectbox(
+    "불만유형",
+    complaints,
+    index=complaints.index(default_complaint)
+    if default_complaint in complaints else 0
+)
+
+detail = st.text_area(
+    "세부 해지사유 및 불만 내용",
+    value=default_detail,
+    disabled=(complaint_type == "불만없음")
+)
 
 survey = st.text_area("조사내역 등록")
 cancel_date = st.date_input("해지_해지일자", value=date.today())
@@ -64,10 +69,12 @@ if st.button("저장"):
         st.stop()
 
     save_result({
-        "관리지사": selected["관리지사"],
+        "관리지사": selected.get("관리지사",""),
         "계약번호": selected["계약번호"],
         "상호": selected["상호"],
-        "담당자": selected.get("담당자", ""),
+        "해지사유": cancel_reason,
+        "불만유형": complaint_type,
+        "세부내용": detail,
         "조사내역": survey,
         "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
