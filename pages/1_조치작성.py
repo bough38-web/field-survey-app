@@ -4,8 +4,8 @@ from storage import load_targets, load_results, save_result, load_reason_map
 
 BRANCH_ORDER = ["중앙","강북","서대문","고양","의정부","남양주","강릉","원주"]
 
-st.set_page_config(page_title="조치 작성", layout="wide")
-st.title("✍️ 조치 작성")
+st.set_page_config(page_title="사유등록대상", layout="wide")
+st.title("✍️ 사유등록대상")
 
 targets = load_targets()
 results = load_results()
