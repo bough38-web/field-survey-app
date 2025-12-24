@@ -7,7 +7,7 @@ from storage import load_targets, load_results, save_result, load_reason_map
 # ==========================================
 # 1. 페이지 설정 및 스타일링 (High-End CSS)
 # ==========================================
-st.set_page_config(page_title="사유 등록 및 조치", layout="wide", page_icon="📝")
+st.title("📝 사유 등록 및 조치")
 
 st.markdown("""
 <style>
