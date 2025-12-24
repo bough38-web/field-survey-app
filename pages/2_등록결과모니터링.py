@@ -1,19 +1,27 @@
 import streamlit as st
 import pandas as pd
-from storage import load_results
+# check_admin_password 추가 Import
+from storage import load_results, check_admin_password
 
-st.set_page_config(page_title="등록 결과 모니터링", layout="wide")
-st.title("📊 등록 결과 모니터링")
+# Page Config
+st.set_page_config(page_title="등록 결과 모니터링", layout="wide", page_icon="📊")
+
+# 🔒 관리자 인증 실행
+check_admin_password()
+
+st.title("📊 등록 결과 모니터링 (Admin)")
 
 # ==========================================
-# 1. 데이터 로드 및 오류 방지 (핵심 수정)
+# 1. 데이터 로드
 # ==========================================
 results = load_results()
 
-# [수정] 데이터가 아예 없는 경우 안내 문구 표시 후 중단
 if results.empty:
-    st.info("📭 아직 등록된 조치 결과가 없습니다. '사유 등록 대상' 메뉴에서 조치를 입력해주세요.")
+    st.info("📭 아직 등록된 조치 결과가 없습니다.")
     st.stop()
+
+if "계약번호" in results.columns:
+    results["계약번호"] = results["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
 
 # [수정] '계약번호' 컬럼이 존재할 때만 문자열 변환 수행 (KeyError 방지)
 if "계약번호" in results.columns:
