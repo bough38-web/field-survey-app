@@ -7,27 +7,14 @@ BRANCH_ORDER = ["중앙","강북","서대문","고양","의정부","남양주","
 st.set_page_config(page_title="조치 작성", layout="wide")
 st.title("✍️ 조치 작성")
 
-# =========================
-# 데이터 로드
-# =========================
 targets = load_targets()
 results = load_results()
 
-# 오늘 처리 건수
-today = date.today().strftime("%Y-%m-%d")
-today_count = (
-    results[results["해지일자"] == today].shape[0]
-    if not results.empty and "해지일자" in results.columns
-    else 0
-)
-
-st.metric("📌 오늘 처리 건수", today_count)
-
 # =========================
-# 미처리 대상만 남기기
+# 이미 처리된 계약번호 제외 (해지사유 기준)
 # =========================
-if not results.empty:
-    processed = results["계약번호"].astype(str).unique()
+if not results.empty and "해지사유" in results.columns:
+    processed = results[results["해지사유"].notna()]["계약번호"].astype(str).unique()
     targets = targets[~targets["계약번호"].astype(str).isin(processed)]
 
 targets = targets.dropna(subset=["관리지사","계약번호","상호"])
@@ -75,18 +62,19 @@ st.text_input("담당자", row.get("담당자",""), disabled=True)
 # 해지사유 / 불만유형
 # =========================
 reason_map = load_reason_map()
-reasons = sorted(reason_map["해지사유"].unique())
-reason = st.selectbox("해지사유", reasons)
+reason = st.selectbox("해지사유", sorted(reason_map["해지사유"].unique()))
 
 complaints = reason_map[reason_map["해지사유"]==reason]["불만유형"].unique()
 complaint = st.selectbox("불만유형", complaints)
 
-detail = st.text_area("세부 해지사유 및 불만 내용", disabled=(complaint=="불만없음"))
-cancel_date = st.date_input("해지일자", value=date.today())
+# 🔥 항상 활성화
+detail = st.text_area("세부 해지사유 및 불만 내용")
+
+cancel_date = st.date_input("해지_해지일자", value=date.today())
 remark = st.text_area("비고")
 
 # =========================
-# 저장 → 자동 다음 이동
+# 저장
 # =========================
 if st.button("💾 저장 후 다음"):
     save_result({
@@ -97,9 +85,8 @@ if st.button("💾 저장 후 다음"):
         "해지사유": reason,
         "불만유형": complaint,
         "세부 해지사유 및 불만 내용": detail,
-        "해지일자": cancel_date.strftime("%Y-%m-%d"),
+        "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
     })
-
     st.success("저장 완료! 다음 대상으로 이동합니다.")
     st.experimental_rerun()
