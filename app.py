@@ -1,45 +1,29 @@
 import streamlit as st
-import pandas as pd
-# storage에서 인증 함수 import
-from storage import load_targets, load_results, check_admin_password
 
-# Page Config는 무조건 맨 위에
+# 1. 전역 페이지 설정
 st.set_page_config(page_title="현장조사 관리 허브", layout="wide", page_icon="🏢")
 
-# 🔒 관리자 인증 실행 (인증 안 되면 여기서 멈춤)
-check_admin_password()
+# 2. 페이지 정의 (st.Page 활용)
+# [사용자 메뉴 그룹]
+user_pages = [
+    st.Page("pages/1_사유등록대상.py", title="사유 등록 및 조치", icon="📝"),
+    st.Page("pages/3_현황대시보드.py", title="종합 현황 대시보드", icon="💧"),
+]
 
-# =========================
-# 관리자 전용 콘텐츠 시작
-# =========================
-st.title("📌 현장조사 관리 허브 (Admin)")
-st.markdown("---")
+# [관리자 메뉴 그룹]
+admin_pages = [
+    st.Page("admin_home.py", title="관리자 홈", icon="🏠"),
+    st.Page("pages/0_조사대상업로드.py", title="조사 대상 업로드", icon="📤"),
+    st.Page("pages/2_등록결과모니터링.py", title="등록 결과 모니터링", icon="📊"),
+]
 
-targets = load_targets()
-results = load_results()
+# 3. 네비게이션 그룹핑 적용
+st.sidebar.title("Navigation")
 
-col1, col2, col3 = st.columns(3)
+pg = st.navigation({
+    "👤 사용자 모드 (User)": user_pages,
+    "🔒 관리자 모드 (Admin)": admin_pages
+})
 
-total_target = len(targets)
-total_done = len(results)
-progress = (total_done / total_target * 100) if total_target > 0 else 0
-
-with col1:
-    st.metric("총 조사 대상", f"{total_target}건")
-with col2:
-    st.metric("조치 완료", f"{total_done}건")
-with col3:
-    st.metric("진행률", f"{progress:.1f}%")
-
-st.progress(progress / 100)
-
-st.subheader("📢 관리자 공지")
-st.info("현재 관리자 권한으로 접속 중입니다. 좌측 메뉴에서 데이터 업로드 및 모니터링을 수행할 수 있습니다.")
-
-if not results.empty:
-    with st.expander("📊 최근 조치 내역 (최신 5건)"):
-        st.dataframe(results.tail(5), use_container_width=True)
-
-if not results.empty:
-    with st.expander("📊 최근 조치 내역 (최신 5건)"):
-        st.dataframe(results.tail(5)[["관리지사", "계약번호", "상호", "해지사유", "담당자"]])
+# 4. 선택된 페이지 실행
+pg.run()
