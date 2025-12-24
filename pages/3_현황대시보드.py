@@ -46,7 +46,7 @@ st.markdown("""
         border-right: 1px solid #e2e8f0;
     }
 
-    /* 🌟 [Advanced Table Styling] 시각적으로 돋보이는 테이블 CSS */
+    /* 🌟 [Advanced Table Styling] 테이블 디자인 */
     .styled-table {
         width: 100%;
         border-collapse: collapse;
@@ -55,27 +55,27 @@ st.markdown("""
         font-family: 'Pretendard', sans-serif;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
         border-radius: 10px;
-        overflow: hidden; /* 둥근 모서리 적용 */
+        overflow: hidden; 
     }
     .styled-table thead tr {
-        background-color: #2563eb; /* 헤더 파란색 */
+        background-color: #2563eb; 
         color: #ffffff;
-        text-align: center; /* 헤더 가운데 정렬 */
+        text-align: center;
     }
     .styled-table th {
         padding: 15px;
         font-weight: 600;
         letter-spacing: 0.5px;
-        text-align: center !important; /* 강제 중앙 정렬 */
+        text-align: center !important;
         white-space: nowrap;
     }
     .styled-table td {
         padding: 12px 15px;
         border-bottom: 1px solid #dddddd;
-        text-align: center !important; /* 값 가운데 정렬 */
+        text-align: center !important;
         vertical-align: middle;
         color: #334155;
-        white-space: normal; /* 내용 길면 줄바꿈 */
+        white-space: normal;
         word-wrap: break-word;
     }
     .styled-table tbody tr {
@@ -83,11 +83,11 @@ st.markdown("""
         transition: all 0.2s ease-in-out;
     }
     .styled-table tbody tr:nth-of-type(even) {
-        background-color: #f8fafc; /* 줄무늬 효과 */
+        background-color: #f8fafc;
     }
     .styled-table tbody tr:hover {
-        background-color: #eff6ff; /* 호버 효과 (연한 파랑) */
-        transform: scale(1.002); /* 살짝 커지는 효과 */
+        background-color: #eff6ff;
+        transform: scale(1.002);
         font-weight: 600;
         color: #2563eb;
     }
@@ -97,7 +97,7 @@ st.markdown("""
         border-radius: 10px;
         width: 100px;
         height: 8px;
-        margin: 0 auto; /* 가운데 정렬 */
+        margin: 0 auto;
         overflow: hidden;
     }
     .progress-fill {
@@ -227,7 +227,6 @@ st.markdown("---")
 # ==========================================
 # 5. 시각화 (Altair)
 # ==========================================
-# 데이터 집계
 branch_stats = filtered_targets.groupby("관리지사표시").size().reset_index(name="대상건수")
 
 if not filtered_results.empty:
@@ -241,7 +240,6 @@ branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(
 branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).fillna(0)
 
-# 차트 생성
 bar_props = {"cornerRadiusTopLeft": 10, "cornerRadiusTopRight": 10, "size": 30}
 base = alt.Chart(branch_stats).encode(
     x=alt.X("관리지사표시:N", sort=BRANCH_ORDER, title=None, axis=alt.Axis(labelAngle=0))
@@ -260,7 +258,6 @@ text = base.mark_text(dy=-10, color="#1e293b", fontWeight="bold").encode(
 )
 chart1 = (bar_bg + bar_fg + text).properties(title="🏢 지사별 진행 현황", height=320)
 
-# 해지 사유 차트
 if not filtered_results.empty and "해지사유" in filtered_results.columns:
     reason_counts = filtered_results["해지사유"].value_counts().reset_index()
     reason_counts.columns = ["해지사유", "건수"]
@@ -280,7 +277,6 @@ if not filtered_results.empty and "해지사유" in filtered_results.columns:
 else:
     chart2 = alt.Chart(pd.DataFrame({"text": ["데이터 없음"]})).mark_text().encode(text="text").properties(title="데이터 없음", height=320)
 
-# 담당자 실적 차트
 if not filtered_results.empty and "담당자" in filtered_results.columns:
     owner_counts = filtered_results["담당자"].value_counts().reset_index()
     owner_counts.columns = ["담당자", "처리건수"]
@@ -294,7 +290,6 @@ if not filtered_results.empty and "담당자" in filtered_results.columns:
 else:
     chart3 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
-# 일별 추이 차트
 if not filtered_results.empty and "처리일시" in filtered_results.columns:
     filtered_results["처리날짜"] = pd.to_datetime(filtered_results["처리일시"], errors='coerce').dt.date
     daily_counts = filtered_results.groupby("처리날짜").size().reset_index(name="건수")
@@ -317,7 +312,7 @@ with row2_col1: st.altair_chart(chart3, use_container_width=True)
 with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
 # ==========================================
-# 6. 상세 데이터 테이블 (HTML Table High-End)
+# 6. 상세 데이터 테이블 (HTML Render Fix)
 # ==========================================
 def render_custom_table(df):
     """Pandas DataFrame을 예쁜 HTML 테이블로 변환"""
@@ -325,7 +320,6 @@ def render_custom_table(df):
     html += '<thead><tr><th>지사명</th><th>대상 건수</th><th>완료 건수</th><th>진행률</th><th>상태(Progress)</th></tr></thead>'
     html += '<tbody>'
     
-    # 지사 순서대로 정렬 (없으면 원본 순서)
     try:
         df['sort_key'] = df['관리지사표시'].apply(lambda x: BRANCH_ORDER.index(x) if x in BRANCH_ORDER else 99)
         df = df.sort_values('sort_key').drop(columns=['sort_key'])
@@ -352,6 +346,7 @@ def render_custom_table(df):
 
 st.markdown("### 📄 지사별 상세 데이터 (Detailed View)")
 if not branch_stats.empty:
+    # 🚨 중요: 여기서 unsafe_allow_html=True를 반드시 써야 HTML 표가 보입니다.
     st.markdown(render_custom_table(branch_stats), unsafe_allow_html=True)
 else:
     st.info("표시할 데이터가 없습니다.")
