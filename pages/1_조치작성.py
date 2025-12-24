@@ -22,19 +22,23 @@ row = st.selectbox(
 )
 selected = df.loc[row]
 
-# 기본 정보
+# =========================
+# 기본 정보 (읽기 전용)
+# =========================
 st.text_input("관리지사", selected.get("관리지사",""), disabled=True)
 st.text_input("계약번호", selected["계약번호"], disabled=True)
 st.text_input("상호", selected["상호"], disabled=True)
 
+# =========================
 # 해지사유 / 불만유형
+# =========================
 reason_map = load_reason_map()
 
 default_reason = selected.get("해지사유", "")
 default_complaint = selected.get("불만유형", "")
 default_detail = selected.get("세부내용", "")
 
-reasons = sorted(reason_map["해지사유"].unique())
+reasons = sorted(reason_map["해지사유"].dropna().unique())
 cancel_reason = st.selectbox(
     "해지사유",
     reasons,
@@ -59,15 +63,16 @@ detail = st.text_area(
     disabled=(complaint_type == "불만없음")
 )
 
-survey = st.text_area("조사내역 등록")
+# =========================
+# 기타 입력
+# =========================
 cancel_date = st.date_input("해지_해지일자", value=date.today())
 remark = st.text_area("비고")
 
+# =========================
+# 저장
+# =========================
 if st.button("저장"):
-    if not survey.strip():
-        st.error("조사내역은 필수입니다.")
-        st.stop()
-
     save_result({
         "관리지사": selected.get("관리지사",""),
         "계약번호": selected["계약번호"],
@@ -75,9 +80,8 @@ if st.button("저장"):
         "해지사유": cancel_reason,
         "불만유형": complaint_type,
         "세부내용": detail,
-        "조사내역": survey,
         "해지_해지일자": cancel_date.strftime("%Y-%m-%d"),
         "비고": remark
     })
 
-    st.success("조사 내역이 저장되었습니다.")
+    st.success("조사 정보가 저장되었습니다.")
