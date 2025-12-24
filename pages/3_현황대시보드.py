@@ -125,7 +125,7 @@ st.markdown("---")
 # ==========================================
 
 # ------------------------------------------
-# [데이터 집계 & 타입 강제 변환] SchemaError 방지 핵심
+# [데이터 집계]
 # ------------------------------------------
 branch_stats = filtered_targets.groupby("관리지사표시").size().reset_index(name="대상건수")
 
@@ -136,28 +136,24 @@ else:
     branch_stats["완료건수"] = 0
 
 branch_stats = branch_stats.fillna(0)
-# [중요] Python 기본 int/float로 변환 (Numpy int64 오류 방지)
 branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(x))
 branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).round(1).apply(lambda x: float(x))
 
 # ------------------------------------------
-# [Chart 1] 지사별 진척도 (Rounded Bar - 호환성 개선)
+# [Chart 1] 지사별 진척도
 # ------------------------------------------
-# cornerRadius 대신 cornerRadiusTopLeft/Right 사용으로 호환성 확보
 bar_props = {"cornerRadiusTopLeft": 10, "cornerRadiusTopRight": 10, "size": 30}
 
 base = alt.Chart(branch_stats).encode(
     x=alt.X("관리지사표시:N", sort=BRANCH_ORDER, title=None, axis=alt.Axis(labelAngle=0))
 )
 
-# 배경 막대
 bar_bg = base.mark_bar(color="#f1f5f9", **bar_props).encode(
     y=alt.Y("대상건수:Q", title="건수"),
     tooltip=[alt.Tooltip("관리지사표시:N", title="지사"), alt.Tooltip("대상건수:Q", title="대상")]
 )
 
-# 진행 막대
 bar_fg = base.mark_bar(color="#3b82f6", **bar_props).encode(
     y=alt.Y("완료건수:Q"),
     tooltip=[
@@ -167,16 +163,12 @@ bar_fg = base.mark_bar(color="#3b82f6", **bar_props).encode(
     ]
 )
 
-# 텍스트
 text = base.mark_text(dy=-10, color="#1e293b", fontWeight="bold").encode(
     y="대상건수:Q",
     text=alt.Text("진행률:Q", format=".1f")
 )
 
-chart1 = (bar_bg + bar_fg + text).properties(
-    title="🏢 지사별 진행 현황",
-    height=320
-)
+chart1 = (bar_bg + bar_fg + text).properties(title="🏢 지사별 진행 현황", height=320)
 
 # ------------------------------------------
 # [Chart 2] 해지 사유 (Bubble Chart)
@@ -184,7 +176,6 @@ chart1 = (bar_bg + bar_fg + text).properties(
 if not filtered_results.empty and "해지사유" in filtered_results.columns:
     reason_counts = filtered_results["해지사유"].value_counts().reset_index()
     reason_counts.columns = ["해지사유", "건수"]
-    # 타입 안전 변환
     reason_counts["건수"] = reason_counts["건수"].apply(lambda x: int(x))
     
     base_bubble = alt.Chart(reason_counts).encode(
@@ -198,15 +189,9 @@ if not filtered_results.empty and "해지사유" in filtered_results.columns:
         color=alt.Color("해지사유:N", legend=None, scale=alt.Scale(scheme="blues"))
     )
     
-    text_bubble = base_bubble.mark_text(color="white", fontWeight="bold").encode(
-        text="건수:Q"
-    )
+    text_bubble = base_bubble.mark_text(color="white", fontWeight="bold").encode(text="건수:Q")
     
-    # Layering 후 properties 적용
-    chart2 = (bubbles + text_bubble).properties(
-        title="💧 해지 사유 분포",
-        height=320
-    ).configure_view(strokeWidth=0)
+    chart2 = (bubbles + text_bubble).properties(title="💧 해지 사유 분포", height=320).configure_view(strokeWidth=0)
 
 else:
     chart2 = alt.Chart(pd.DataFrame({"text": ["데이터 없음"]})).mark_text().encode(text="text").properties(title="데이터 없음", height=320)
@@ -224,10 +209,7 @@ if not filtered_results.empty and "담당자" in filtered_results.columns:
         x=alt.X("처리건수:Q", title="건수"),
         y=alt.Y("담당자:N", sort="-x", title=None),
         tooltip=[alt.Tooltip("담당자:N"), alt.Tooltip("처리건수:Q")]
-    ).properties(
-        title="🏆 담당자별 실적 (Top 10)",
-        height=320
-    )
+    ).properties(title="🏆 담당자별 실적 (Top 10)", height=320)
 else:
     chart3 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
@@ -239,19 +221,12 @@ if not filtered_results.empty and "처리일시" in filtered_results.columns:
     daily_counts = filtered_results.groupby("처리날짜").size().reset_index(name="건수")
     daily_counts["건수"] = daily_counts["건수"].apply(lambda x: int(x))
 
-    chart4 = alt.Chart(daily_counts).mark_area(
-        interpolate='monotone', 
-        fillOpacity=0.6,
-        line={'color':'#6366f1'}
-    ).encode(
+    chart4 = alt.Chart(daily_counts).mark_area(interpolate='monotone', fillOpacity=0.6, line={'color':'#6366f1'}).encode(
         x=alt.X("처리날짜:T", title=None),
         y=alt.Y("건수:Q", title="등록 건수"),
         color=alt.value("#818cf8"),
         tooltip=[alt.Tooltip("처리날짜:T", title="날짜"), alt.Tooltip("건수:Q", title="건수")]
-    ).properties(
-        title="📅 일별 처리 흐름",
-        height=320
-    )
+    ).properties(title="📅 일별 처리 흐름", height=320)
 else:
     chart4 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
@@ -262,21 +237,30 @@ else:
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
-with row1_col1:
-    st.altair_chart(chart1, use_container_width=True)
+with row1_col1: st.altair_chart(chart1, use_container_width=True)
+with row1_col2: st.altair_chart(chart2, use_container_width=True)
+with row2_col1: st.altair_chart(chart3, use_container_width=True)
+with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
-with row1_col2:
-    st.altair_chart(chart2, use_container_width=True)
-
-with row2_col1:
-    st.altair_chart(chart3, use_container_width=True)
-
-with row2_col2:
-    st.altair_chart(chart4, use_container_width=True)
-
+# ==========================================
+# 7. 상세 데이터 테이블 (수정됨: Streamlit Native Column Config)
+# ==========================================
 with st.expander("📄 상세 데이터 테이블 열기"):
     st.dataframe(
-        branch_stats.style.background_gradient(subset=["진행률"], cmap="Blues"),
+        branch_stats,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "관리지사표시": st.column_config.TextColumn("지사명"),
+            "대상건수": st.column_config.NumberColumn("대상 건수", format="%d건"),
+            "완료건수": st.column_config.NumberColumn("완료 건수", format="%d건"),
+            "진행률": st.column_config.ProgressColumn(
+                "진행률",
+                help="전체 대상 대비 완료 비율",
+                format="%.1f%%",
+                min_value=0,
+                max_value=100,
+            ),
+        },
+        column_order=["관리지사표시", "대상건수", "완료건수", "진행률"] # 순서 정리
     )
