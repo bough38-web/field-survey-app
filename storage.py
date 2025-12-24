@@ -32,7 +32,6 @@ def check_admin_password():
         st.session_state["is_admin"] = False
 
     if st.session_state["is_admin"]:
-        # 사이드바에 로그아웃 버튼 표시
         if st.sidebar.button("🔒 관리자 로그아웃", key="logout_btn"):
             st.session_state["is_admin"] = False
             st.rerun()
