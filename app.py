@@ -1,13 +1,20 @@
 import streamlit as st
 import pandas as pd
-from storage import load_targets, load_results
+# storage에서 인증 함수 import
+from storage import load_targets, load_results, check_admin_password
 
-st.set_page_config(page_title="현장조사 관리 허브", layout="wide")
+# Page Config는 무조건 맨 위에
+st.set_page_config(page_title="현장조사 관리 허브", layout="wide", page_icon="🏢")
 
-st.title("📌 현장조사 관리 허브")
+# 🔒 관리자 인증 실행 (인증 안 되면 여기서 멈춤)
+check_admin_password()
+
+# =========================
+# 관리자 전용 콘텐츠 시작
+# =========================
+st.title("📌 현장조사 관리 허브 (Admin)")
 st.markdown("---")
 
-# 데이터 로드
 targets = load_targets()
 results = load_results()
 
@@ -26,8 +33,12 @@ with col3:
 
 st.progress(progress / 100)
 
-st.subheader("📢 공지사항")
-st.info("좌측 메뉴에서 [조사 대상 업로드] 또는 [사유 등록 대상]을 선택하여 업무를 진행해주세요.")
+st.subheader("📢 관리자 공지")
+st.info("현재 관리자 권한으로 접속 중입니다. 좌측 메뉴에서 데이터 업로드 및 모니터링을 수행할 수 있습니다.")
+
+if not results.empty:
+    with st.expander("📊 최근 조치 내역 (최신 5건)"):
+        st.dataframe(results.tail(5), use_container_width=True)
 
 if not results.empty:
     with st.expander("📊 최근 조치 내역 (최신 5건)"):
