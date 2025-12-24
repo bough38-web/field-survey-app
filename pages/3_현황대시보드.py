@@ -4,7 +4,7 @@ import altair as alt
 from storage import load_targets, load_results
 
 # ==========================================
-# 1. 페이지 설정 및 스타일링
+# 1. 페이지 설정 및 스타일링 (High-End CSS)
 # ==========================================
 st.set_page_config(page_title="종합 현황 대시보드", layout="wide", page_icon="💧")
 
@@ -45,6 +45,66 @@ st.markdown("""
         background-color: #f1f5f9;
         border-right: 1px solid #e2e8f0;
     }
+
+    /* 🌟 [Advanced Table Styling] 시각적으로 돋보이는 테이블 CSS */
+    .styled-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 25px 0;
+        font-size: 0.95em;
+        font-family: 'Pretendard', sans-serif;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+        border-radius: 10px;
+        overflow: hidden; /* 둥근 모서리 적용 */
+    }
+    .styled-table thead tr {
+        background-color: #2563eb; /* 헤더 파란색 */
+        color: #ffffff;
+        text-align: center; /* 헤더 가운데 정렬 */
+    }
+    .styled-table th {
+        padding: 15px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-align: center !important; /* 강제 중앙 정렬 */
+        white-space: nowrap;
+    }
+    .styled-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #dddddd;
+        text-align: center !important; /* 값 가운데 정렬 */
+        vertical-align: middle;
+        color: #334155;
+        white-space: normal; /* 내용 길면 줄바꿈 */
+        word-wrap: break-word;
+    }
+    .styled-table tbody tr {
+        background-color: #ffffff;
+        transition: all 0.2s ease-in-out;
+    }
+    .styled-table tbody tr:nth-of-type(even) {
+        background-color: #f8fafc; /* 줄무늬 효과 */
+    }
+    .styled-table tbody tr:hover {
+        background-color: #eff6ff; /* 호버 효과 (연한 파랑) */
+        transform: scale(1.002); /* 살짝 커지는 효과 */
+        font-weight: 600;
+        color: #2563eb;
+    }
+    /* 커스텀 진행바 */
+    .progress-bg {
+        background-color: #e2e8f0;
+        border-radius: 10px;
+        width: 100px;
+        height: 8px;
+        margin: 0 auto; /* 가운데 정렬 */
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #60a5fa 0%, #2563eb 100%);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,14 +125,14 @@ def preprocess_data(targets, results):
             targets["관리지사표시"] = targets["관리지사"].str.replace("지사", "").str.strip()
         else:
             targets["관리지사표시"] = "미지정"
-        targets["계약번호"] = targets["계약번호"].astype(str)
+        targets["계약번호"] = targets["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
     
     if not results.empty:
         if "관리지사" in results.columns:
             results["관리지사표시"] = results["관리지사"].str.replace("지사", "").str.strip()
         else:
             results["관리지사표시"] = "미지정"
-        results["계약번호"] = results["계약번호"].astype(str)
+        results["계약번호"] = results["계약번호"].astype(str).str.replace(r'\.0$', '', regex=True)
 
     return targets, results
 
@@ -83,19 +143,17 @@ if targets.empty:
     st.stop()
 
 # ==========================================
-# 3. 사이드바 필터 (개선됨: 비워두면 전체)
+# 3. 사이드바 필터
 # ==========================================
 with st.sidebar:
     st.header("🔍 필터 설정")
     st.markdown("보고 싶은 데이터를 선택하세요.")
     
-    # 3-1. 지사 필터
     with st.expander("🏢 지사 선택", expanded=True):
         available_branches = [b for b in BRANCH_ORDER if b in targets["관리지사표시"].unique()]
         other_branches = [b for b in targets["관리지사표시"].unique() if b not in BRANCH_ORDER]
         final_branch_order = available_branches + other_branches
         
-        # [수정됨] default=[] (비워둠), placeholder 메시지 변경
         selected_branches = st.multiselect(
             "지사를 선택해주세요",
             options=final_branch_order,
@@ -103,9 +161,7 @@ with st.sidebar:
             placeholder="지사 선택 (비워두면 전체)"
         )
 
-    # 3-2. 담당자 필터 (선택된 지사에 따라 연동)
     with st.expander("👤 담당자 선택", expanded=True):
-        # 지사 선택이 비어있으면 전체 데이터, 선택되어 있으면 해당 지사 데이터만 사용
         if selected_branches:
             filtered_by_branch = targets[targets["관리지사표시"].isin(selected_branches)]
         else:
@@ -125,25 +181,21 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # 3-3. 초기화 버튼
     if st.button("🔄 필터 초기화", use_container_width=True):
         st.rerun()
 
-# 필터 적용 로직
-# 1. 지사 필터: 비어있으면 전체(targets), 있으면 필터링
+# 필터 적용
 if selected_branches:
     filtered_targets = targets[targets["관리지사표시"].isin(selected_branches)]
 else:
     filtered_targets = targets
 
-# 2. 담당자 필터: 비어있으면 위 결과 유지, 있으면 추가 필터링
 if selected_owners:
     filtered_targets = filtered_targets[filtered_targets["담당자"].isin(selected_owners)]
 
 target_ids = filtered_targets["계약번호"].unique()
 filtered_results = results[results["계약번호"].isin(target_ids)] if not results.empty else pd.DataFrame()
 
-# 필터 결과 요약 표시
 st.sidebar.info(f"📊 표시 대상: **{len(filtered_targets):,}건**")
 
 # ==========================================
@@ -173,12 +225,9 @@ with col4:
 st.markdown("---")
 
 # ==========================================
-# 5. 시각화
+# 5. 시각화 (Altair)
 # ==========================================
-
-# ------------------------------------------
-# [데이터 집계]
-# ------------------------------------------
+# 데이터 집계
 branch_stats = filtered_targets.groupby("관리지사표시").size().reset_index(name="대상건수")
 
 if not filtered_results.empty:
@@ -190,41 +239,28 @@ else:
 branch_stats = branch_stats.fillna(0)
 branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(x))
 branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
-branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).round(1).apply(lambda x: float(x))
+branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).fillna(0)
 
-# ------------------------------------------
-# [Chart 1] 지사별 진척도
-# ------------------------------------------
+# 차트 생성
 bar_props = {"cornerRadiusTopLeft": 10, "cornerRadiusTopRight": 10, "size": 30}
-
 base = alt.Chart(branch_stats).encode(
     x=alt.X("관리지사표시:N", sort=BRANCH_ORDER, title=None, axis=alt.Axis(labelAngle=0))
 )
-
 bar_bg = base.mark_bar(color="#f1f5f9", **bar_props).encode(
     y=alt.Y("대상건수:Q", title="건수"),
     tooltip=[alt.Tooltip("관리지사표시:N", title="지사"), alt.Tooltip("대상건수:Q", title="대상")]
 )
-
 bar_fg = base.mark_bar(color="#3b82f6", **bar_props).encode(
     y=alt.Y("완료건수:Q"),
-    tooltip=[
-        alt.Tooltip("관리지사표시:N", title="지사"),
-        alt.Tooltip("완료건수:Q", title="완료"),
-        alt.Tooltip("진행률:Q", title="진행률(%)")
-    ]
+    tooltip=[alt.Tooltip("관리지사표시:N", title="지사"), alt.Tooltip("완료건수:Q", title="완료")]
 )
-
 text = base.mark_text(dy=-10, color="#1e293b", fontWeight="bold").encode(
     y="대상건수:Q",
     text=alt.Text("진행률:Q", format=".1f")
 )
-
 chart1 = (bar_bg + bar_fg + text).properties(title="🏢 지사별 진행 현황", height=320)
 
-# ------------------------------------------
-# [Chart 2] 해지 사유 (Bubble Chart)
-# ------------------------------------------
+# 해지 사유 차트
 if not filtered_results.empty and "해지사유" in filtered_results.columns:
     reason_counts = filtered_results["해지사유"].value_counts().reset_index()
     reason_counts.columns = ["해지사유", "건수"]
@@ -235,28 +271,21 @@ if not filtered_results.empty and "해지사유" in filtered_results.columns:
         y=alt.Y("건수:Q", title=None, axis=None),
         tooltip=[alt.Tooltip("해지사유:N"), alt.Tooltip("건수:Q")]
     )
-    
     bubbles = base_bubble.mark_circle().encode(
         size=alt.Size("건수:Q", scale=alt.Scale(range=[300, 2000]), legend=None),
         color=alt.Color("해지사유:N", legend=None, scale=alt.Scale(scheme="blues"))
     )
-    
     text_bubble = base_bubble.mark_text(color="white", fontWeight="bold").encode(text="건수:Q")
-    
     chart2 = (bubbles + text_bubble).properties(title="💧 해지 사유 분포", height=320).configure_view(strokeWidth=0)
-
 else:
     chart2 = alt.Chart(pd.DataFrame({"text": ["데이터 없음"]})).mark_text().encode(text="text").properties(title="데이터 없음", height=320)
 
-# ------------------------------------------
-# [Chart 3] 담당자별 실적
-# ------------------------------------------
+# 담당자 실적 차트
 if not filtered_results.empty and "담당자" in filtered_results.columns:
     owner_counts = filtered_results["담당자"].value_counts().reset_index()
     owner_counts.columns = ["담당자", "처리건수"]
     owner_counts["처리건수"] = owner_counts["처리건수"].apply(lambda x: int(x))
     owner_counts = owner_counts.head(10)
-    
     chart3 = alt.Chart(owner_counts).mark_bar(cornerRadiusEnd=5, height=15, color="#10b981").encode(
         x=alt.X("처리건수:Q", title="건수"),
         y=alt.Y("담당자:N", sort="-x", title=None),
@@ -265,14 +294,11 @@ if not filtered_results.empty and "담당자" in filtered_results.columns:
 else:
     chart3 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
-# ------------------------------------------
-# [Chart 4] 일자별 추이
-# ------------------------------------------
+# 일별 추이 차트
 if not filtered_results.empty and "처리일시" in filtered_results.columns:
     filtered_results["처리날짜"] = pd.to_datetime(filtered_results["처리일시"], errors='coerce').dt.date
     daily_counts = filtered_results.groupby("처리날짜").size().reset_index(name="건수")
     daily_counts["건수"] = daily_counts["건수"].apply(lambda x: int(x))
-
     chart4 = alt.Chart(daily_counts).mark_area(interpolate='monotone', fillOpacity=0.6, line={'color':'#6366f1'}).encode(
         x=alt.X("처리날짜:T", title=None),
         y=alt.Y("건수:Q", title="등록 건수"),
@@ -282,10 +308,6 @@ if not filtered_results.empty and "처리일시" in filtered_results.columns:
 else:
     chart4 = alt.Chart(pd.DataFrame()).mark_text().properties(height=320)
 
-
-# ==========================================
-# 6. 레이아웃 배치
-# ==========================================
 row1_col1, row1_col2 = st.columns(2)
 row2_col1, row2_col2 = st.columns(2)
 
@@ -295,24 +317,41 @@ with row2_col1: st.altair_chart(chart3, use_container_width=True)
 with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
 # ==========================================
-# 7. 상세 데이터 테이블
+# 6. 상세 데이터 테이블 (HTML Table High-End)
 # ==========================================
-with st.expander("📄 상세 데이터 테이블 열기"):
-    st.dataframe(
-        branch_stats,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "관리지사표시": st.column_config.TextColumn("지사명"),
-            "대상건수": st.column_config.NumberColumn("대상 건수", format="%d건"),
-            "완료건수": st.column_config.NumberColumn("완료 건수", format="%d건"),
-            "진행률": st.column_config.ProgressColumn(
-                "진행률",
-                help="전체 대상 대비 완료 비율",
-                format="%.1f%%",
-                min_value=0,
-                max_value=100,
-            ),
-        },
-        column_order=["관리지사표시", "대상건수", "완료건수", "진행률"]
-    )
+def render_custom_table(df):
+    """Pandas DataFrame을 예쁜 HTML 테이블로 변환"""
+    html = '<table class="styled-table">'
+    html += '<thead><tr><th>지사명</th><th>대상 건수</th><th>완료 건수</th><th>진행률</th><th>상태(Progress)</th></tr></thead>'
+    html += '<tbody>'
+    
+    # 지사 순서대로 정렬 (없으면 원본 순서)
+    try:
+        df['sort_key'] = df['관리지사표시'].apply(lambda x: BRANCH_ORDER.index(x) if x in BRANCH_ORDER else 99)
+        df = df.sort_values('sort_key').drop(columns=['sort_key'])
+    except:
+        pass
+
+    for _, row in df.iterrows():
+        rate = row['진행률']
+        html += f"""
+        <tr>
+            <td><strong>{row['관리지사표시']}</strong></td>
+            <td>{row['대상건수']:,}건</td>
+            <td>{row['완료건수']:,}건</td>
+            <td style="color:#2563eb; font-weight:bold;">{rate:.1f}%</td>
+            <td>
+                <div class="progress-bg">
+                    <div class="progress-fill" style="width: {rate}%;"></div>
+                </div>
+            </td>
+        </tr>
+        """
+    html += '</tbody></table>'
+    return html
+
+st.markdown("### 📄 지사별 상세 데이터 (Detailed View)")
+if not branch_stats.empty:
+    st.markdown(render_custom_table(branch_stats), unsafe_allow_html=True)
+else:
+    st.info("표시할 데이터가 없습니다.")
