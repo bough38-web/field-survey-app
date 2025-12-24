@@ -236,8 +236,8 @@ else:
     branch_stats["완료건수"] = 0
 
 branch_stats = branch_stats.fillna(0)
-branch_stats["대상건수"] = branch_stats["대상건수"].apply(lambda x: int(x))
-branch_stats["완료건수"] = branch_stats["완료건수"].apply(lambda x: int(x))
+branch_stats["대상건수"] = branch_stats["대상건수"].astype(int)
+branch_stats["완료건수"] = branch_stats["완료건수"].astype(int)
 branch_stats["진행률"] = (branch_stats["완료건수"] / branch_stats["대상건수"] * 100).fillna(0)
 
 bar_props = {"cornerRadiusTopLeft": 10, "cornerRadiusTopRight": 10, "size": 30}
@@ -261,7 +261,7 @@ chart1 = (bar_bg + bar_fg + text).properties(title="🏢 지사별 진행 현황
 if not filtered_results.empty and "해지사유" in filtered_results.columns:
     reason_counts = filtered_results["해지사유"].value_counts().reset_index()
     reason_counts.columns = ["해지사유", "건수"]
-    reason_counts["건수"] = reason_counts["건수"].apply(lambda x: int(x))
+    reason_counts["건수"] = reason_counts["건수"].astype(int)
     
     base_bubble = alt.Chart(reason_counts).encode(
         x=alt.X("해지사유:N", title=None, axis=alt.Axis(labels=True, ticks=False, domain=False)),
@@ -280,7 +280,7 @@ else:
 if not filtered_results.empty and "담당자" in filtered_results.columns:
     owner_counts = filtered_results["담당자"].value_counts().reset_index()
     owner_counts.columns = ["담당자", "처리건수"]
-    owner_counts["처리건수"] = owner_counts["처리건수"].apply(lambda x: int(x))
+    owner_counts["처리건수"] = owner_counts["처리건수"].astype(int)
     owner_counts = owner_counts.head(10)
     chart3 = alt.Chart(owner_counts).mark_bar(cornerRadiusEnd=5, height=15, color="#10b981").encode(
         x=alt.X("처리건수:Q", title="건수"),
@@ -293,7 +293,7 @@ else:
 if not filtered_results.empty and "처리일시" in filtered_results.columns:
     filtered_results["처리날짜"] = pd.to_datetime(filtered_results["처리일시"], errors='coerce').dt.date
     daily_counts = filtered_results.groupby("처리날짜").size().reset_index(name="건수")
-    daily_counts["건수"] = daily_counts["건수"].apply(lambda x: int(x))
+    daily_counts["건수"] = daily_counts["건수"].astype(int)
     chart4 = alt.Chart(daily_counts).mark_area(interpolate='monotone', fillOpacity=0.6, line={'color':'#6366f1'}).encode(
         x=alt.X("처리날짜:T", title=None),
         y=alt.Y("건수:Q", title="등록 건수"),
@@ -312,10 +312,10 @@ with row2_col1: st.altair_chart(chart3, use_container_width=True)
 with row2_col2: st.altair_chart(chart4, use_container_width=True)
 
 # ==========================================
-# 6. 상세 데이터 테이블 (HTML Render Fix)
+# 6. 상세 데이터 테이블 (HTML 공백 제거)
 # ==========================================
 def render_custom_table(df):
-    """Pandas DataFrame을 예쁜 HTML 테이블로 변환"""
+    """Pandas DataFrame을 예쁜 HTML 테이블로 변환 (공백 제거)"""
     html = '<table class="styled-table">'
     html += '<thead><tr><th>지사명</th><th>대상 건수</th><th>완료 건수</th><th>진행률</th><th>상태(Progress)</th></tr></thead>'
     html += '<tbody>'
@@ -328,25 +328,24 @@ def render_custom_table(df):
 
     for _, row in df.iterrows():
         rate = row['진행률']
-        html += f"""
-        <tr>
-            <td><strong>{row['관리지사표시']}</strong></td>
-            <td>{row['대상건수']:,}건</td>
-            <td>{row['완료건수']:,}건</td>
-            <td style="color:#2563eb; font-weight:bold;">{rate:.1f}%</td>
-            <td>
-                <div class="progress-bg">
-                    <div class="progress-fill" style="width: {rate}%;"></div>
-                </div>
-            </td>
-        </tr>
-        """
+        # f-string 앞에 공백을 없애서 마크다운이 코드로 인식하지 않게 함
+        html += f"""<tr>
+<td><strong>{row['관리지사표시']}</strong></td>
+<td>{row['대상건수']:,}건</td>
+<td>{row['완료건수']:,}건</td>
+<td style="color:#2563eb; font-weight:bold;">{rate:.1f}%</td>
+<td>
+<div class="progress-bg">
+<div class="progress-fill" style="width: {rate}%;"></div>
+</div>
+</td>
+</tr>"""
+    
     html += '</tbody></table>'
     return html
 
 st.markdown("### 📄 지사별 상세 데이터 (Detailed View)")
 if not branch_stats.empty:
-    # 🚨 중요: 여기서 unsafe_allow_html=True를 반드시 써야 HTML 표가 보입니다.
     st.markdown(render_custom_table(branch_stats), unsafe_allow_html=True)
 else:
     st.info("표시할 데이터가 없습니다.")
