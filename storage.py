@@ -51,7 +51,7 @@ def check_admin_password():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown('<div class="login-container"><h3>🔒 관리자 접속</h3><p style="color:#64748b; font-size:0.8rem;">관리자 코드를 입력하세요.</p></div>', unsafe_allow_html=True)
-        password = st.text_input("Password", type="password", placeholder="Code: 3867", label_visibility="collapsed")
+        password = st.text_input("Password", type="password", placeholder="Code: ****", label_visibility="collapsed")
         
         if st.button("로그인", type="primary", use_container_width=True):
             if password == "3867":
