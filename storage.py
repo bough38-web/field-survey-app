@@ -23,7 +23,7 @@ LOCK_FILE = DATA_DIR / "data.lock"
 
 # --- 🔐 관리자 인증 함수 ---
 def check_admin_password():
-    """관리자 비밀번호(3867) 확인 및 로그인 UI"""
+    """관리자 비밀번호(1234) 확인 및 로그인 UI"""
     if "is_admin" not in st.session_state:
         st.session_state["is_admin"] = False
 
