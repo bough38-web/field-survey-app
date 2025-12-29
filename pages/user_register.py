@@ -5,6 +5,11 @@ from datetime import date
 from storage import load_targets, load_results, save_result, load_reason_map
 
 # ==========================================
+# [설정] 지사 정렬 순서 정의
+# ==========================================
+BRANCH_ORDER = ["중앙", "강북", "서대문", "고양", "의정부", "남양주", "강릉", "원주"]
+
+# ==========================================
 # 1. High-End UI & CSS 스타일링
 # ==========================================
 st.markdown("""
