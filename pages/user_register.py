@@ -2,47 +2,7 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import date
-import io # 추가됨
-import openai # 추가됨
-from streamlit_mic_recorder import mic_recorder # 추가됨
-
 from storage import load_targets, load_results, save_result, load_reason_map
-
-# ==========================================
-# [설정] OpenAI API 키 (필수 설정)
-# ==========================================
-# 실제 배포 시에는 st.secrets["OPENAI_API_KEY"] 사용을 권장합니다.
-openai.api_key = "sk-..." # 👈 여기에 실제 API Key를 입력하세요
-
-# ==========================================
-# 0. AI 음성 처리 함수 (추가됨)
-# ==========================================
-def process_audio_summary(audio_bytes):
-    try:
-        # 1. Bytes -> File 객체 변환
-        audio_file = io.BytesIO(audio_bytes)
-        audio_file.name = "voice.wav"
-        
-        # 2. STT (Whisper)
-        transcript = openai.audio.transcriptions.create(
-            model="whisper-1", 
-            file=audio_file, 
-            language="ko"
-        )
-        raw_text = transcript.text
-
-        # 3. LLM 요약 (GPT-4o)
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "현장 조치 내용을 보고서용으로 간결하게 요약(~~함, ~~했음 체)해줘."},
-                {"role": "user", "content": raw_text}
-            ]
-        )
-        summary = response.choices[0].message.content
-        return raw_text, summary
-    except Exception as e:
-        return None, f"오류: {e}"
 
 # ==========================================
 # 1. High-End UI & CSS 스타일링
@@ -56,7 +16,7 @@ st.markdown("""
         font-family: 'Pretendard', sans-serif;
     }
     
-    /* 1. 반응형 정보 그리드 */
+    /* 1. 반응형 정보 그리드 (핵심 UI 개선) */
     .info-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -64,6 +24,7 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
+    /* 화면이 좁아도 내용은 꽉 차게, 넓으면 가로로 배치 */
     .info-box {
         background: white;
         padding: 16px;
@@ -74,9 +35,10 @@ st.markdown("""
         flex-direction: column;
     }
     
+    /* 라벨과 값 스타일 */
     .info-label { font-size: 0.8rem; color: #64748b; margin-bottom: 4px; font-weight: 500; }
     .info-value { font-size: 1.1rem; font-weight: 700; color: #1e293b; word-break: break-all; }
-    .highlight { color: #ef4444; }
+    .highlight { color: #ef4444; } /* 붉은색 강조 */
 
     /* 2. 입력 폼 컨테이너 */
     .form-container {
@@ -148,6 +110,7 @@ with st.sidebar:
     
     st.caption(f"작업 대기: {len(pending)}건")
 
+# 메인 선택창
 idx = st.selectbox(
     "처리 대상 선택",
     pending.index,
@@ -156,10 +119,11 @@ idx = st.selectbox(
 row = pending.loc[idx]
 
 # ==========================================
-# 4. 고객 정보 (반응형 Grid)
+# 4. 고객 정보 (반응형 Grid 적용)
 # ==========================================
 st.markdown("### 🏢 고객 기본 정보")
 
+# [핵심] 해지일자 컬럼명 자동 매핑 (해지_해지일자 or 해지일자)
 origin_date = row.get("해지일자", row.get("해지_해지일자", "-"))
 try: 
     if pd.notna(origin_date) and str(origin_date).strip() != "-":
@@ -195,7 +159,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 5. 입력 폼 (녹음 기능 통합)
+# 5. 입력 폼
 # ==========================================
 reason_map = load_reason_map()
 if reason_map.empty:
@@ -204,54 +168,14 @@ if reason_map.empty:
 
 st.markdown("### ✍️ 조치 내용 입력")
 
-# [Session State] 텍스트 영역 값을 제어하기 위한 초기화
-if "current_detail" not in st.session_state:
-    st.session_state["current_detail"] = ""
-
 st.markdown('<div class="form-container">', unsafe_allow_html=True)
 
-# 5-1. 상단 선택박스
 c1, c2 = st.columns(2)
 with c1: r = st.selectbox("해지 사유 (필수)", sorted(reason_map["해지사유"].unique()))
 with c2: c = st.selectbox("불만 유형 (필수)", reason_map[reason_map["해지사유"]==r]["불만유형"].unique())
 
-st.divider() # 구분선
+d = st.text_area("상세 내용", height=100, placeholder="내용을 입력하세요")
 
-# 5-2. 녹음 기능 (New!)
-col_mic, col_desc = st.columns([1, 5])
-with col_mic:
-    # 녹음 버튼
-    audio = mic_recorder(
-        start_prompt="🎤 녹음",
-        stop_prompt="⏹️ 완료",
-        just_once=True,
-        key='voice_rec'
-    )
-
-with col_desc:
-    if audio:
-        with st.spinner("🎧 음성 분석 및 요약 중..."):
-            # AI 함수 호출
-            raw_text, summary_text = process_audio_summary(audio['bytes'])
-            
-            if raw_text:
-                # 요약된 내용을 세션 상태(텍스트박스 키)에 반영
-                st.session_state["current_detail"] = summary_text
-                st.caption(f"📝 원본: {raw_text}") # 원본 내용을 작게 표시
-                st.rerun() # 화면 갱신하여 텍스트박스에 반영
-    else:
-        st.caption("👈 버튼을 눌러 내용을 말하면 자동으로 요약 입력됩니다.")
-
-# 5-3. 상세 내용 텍스트 영역 (Session State 연결)
-# key="current_detail"을 사용하여 코드에서 값을 변경(녹음 시)하거나 유저가 직접 수정 가능
-d = st.text_area(
-    "상세 내용", 
-    height=100, 
-    placeholder="내용을 입력하거나 녹음 기능을 사용하세요.",
-    key="current_detail" 
-)
-
-# 5-4. 하단 정보
 c3, c4 = st.columns(2)
 with c3: rd = st.date_input("사유 등록 일자", value=date.today())
 with c4: rm = st.text_area("비고", height=70, placeholder="특이사항")
@@ -259,31 +183,32 @@ with c4: rm = st.text_area("비고", height=70, placeholder="특이사항")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 6. 저장 로직
+# 6. 저장 로직 (멈춤 방지)
 # ==========================================
 st.markdown("---")
 
 if st.button("💾 저장 후 다음", type="primary", use_container_width=True):
     with st.spinner("저장 중..."):
         try:
+            # 저장할 데이터 딕셔너리 생성
             save_data = row.to_dict()
             
+            # [중요] 불필요한 기존 키 제거 및 새 데이터 덮어쓰기
             save_data.update({
                 "해지사유": r,
                 "불만유형": c,
-                "세부 해지사유 및 불만 내용": d, # 텍스트 영역의 최종 값(d) 저장
-                "해지일자": origin_date,
+                "세부 해지사유 및 불만 내용": d,
+                "해지일자": origin_date, # 정제된 날짜 저장
                 "사유등록일자": rd.strftime("%Y-%m-%d"),
                 "비고": rm,
                 "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
             })
             
+            # 해지_해지일자 키가 남아있다면 제거 (깔끔한 저장을 위해)
             if "해지_해지일자" in save_data: del save_data["해지_해지일자"]
             
+            # 저장 실행
             save_result(save_data)
-            
-            # [중요] 저장 완료 후 텍스트 내용 초기화
-            st.session_state["current_detail"] = "" 
             
             st.toast(f"✅ 저장되었습니다! [{row.get('상호')}]", icon="💾")
             time.sleep(0.5)
