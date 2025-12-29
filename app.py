@@ -1,9 +1,39 @@
 import streamlit as st
 
-# [중요] 앱 전체 설정 (여기서만 실행)
-st.set_page_config(page_title="현장조사 관리 시스템", layout="wide", page_icon="🏢")
+# ==========================================
+# [1] 페이지 기본 설정 (앱에서 가장 먼저 실행되어야 함 / 1회만 호출)
+# ==========================================
+st.set_page_config(
+    page_title="현장조사 관리 시스템", 
+    layout="wide", 
+    page_icon="🏢",
+    initial_sidebar_state="expanded"
+)
 
-# --- 페이지 정의 ---
+# ==========================================
+# [2] 한글 폰트(Pretendard) 및 브라우저 언어(ko) 강제 적용
+# ==========================================
+st.components.v1.html("""
+    <script>
+        // 1. HTML lang 속성 변경 (브라우저 번역 방지)
+        window.parent.document.querySelector('html').lang = 'ko';
+        
+        // 2. 폰트 강제 적용 (Pretendard)
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css");
+            body, html, .stApp {
+                font-family: 'Pretendard', sans-serif !important;
+            }
+        `;
+        window.parent.document.head.appendChild(style);
+    </script>
+""", height=0)
+
+# ==========================================
+# [3] 페이지 정의 (Streamlit 1.31+ st.navigation 사용)
+# ==========================================
+
 # 1. 사용자용 페이지 (로그인 불필요)
 user_pages = [
     st.Page("pages/user_register.py", title="사유 등록 및 조치", icon="📝"),
@@ -17,7 +47,9 @@ admin_pages = [
     st.Page("pages/admin_monitor.py", title="등록 결과 모니터링", icon="📊"),
 ]
 
-# --- 네비게이션 그룹핑 ---
+# ==========================================
+# [4] 네비게이션 그룹핑 및 실행
+# ==========================================
 st.sidebar.title("Navigation")
 
 # 그룹으로 묶기
