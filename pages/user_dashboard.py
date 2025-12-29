@@ -15,7 +15,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("💧 종합 현황 대시보드")
+st.title("💧 등록 현황 대시보드")
 
 targets = load_targets()
 results = load_results()
