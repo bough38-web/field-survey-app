@@ -4,18 +4,39 @@ from io import StringIO
 import os
 import time
 
-# storage.py가 상위 폴더가 아닌 같은 pages 폴더에 있다면 import 경로 주의 필요
-# 보통 pages 폴더 안에 있는 파일에서 상위 모듈을 불러올 때는 sys.path 설정이 필요할 수 있으나,
-# 같은 폴더에 storage.py를 두셨거나, 프로젝트 루트에 두셨다면 아래와 같이 사용합니다.
-# (만약 에러나면 storage.py 위치를 확인해야 합니다)
+# storage.py 위치 확인 필요
 from storage import save_targets, load_targets, load_logs, normalize_columns, BACKUP_DIR, check_admin_password
 
-# [수정됨] set_page_config 삭제 (app.py에서 이미 설정했으므로 중복 실행 방지)
-
-# 🔒 인증 실행 (관리자 페이지이므로 필수)
+# 🔒 인증 실행
 check_admin_password()
 
 st.title("📤 조사 대상 업로드")
+
+# =========================================================================
+# [추가됨] 컬럼 순서 재배열 함수
+# =========================================================================
+def reorder_columns(df):
+    """
+    데이터프레임의 컬럼 순서를 시각적으로 보기 좋게 정렬합니다.
+    특히 'Nims 해지사유'가 있다면 반드시 '해지일자' 뒤에 위치시킵니다.
+    """
+    # 1. 원하는 우선순위 순서 정의 (필요에 따라 수정 가능)
+    priority_order = [
+        "관리지사", "계약번호", "상호", "담당자", 
+        "해지일자", "Nims 해지사유",  # 👈 핵심: 해지일자 바로 뒤에 배치
+        "주소", "연락처", "휴대폰"
+    ]
+    
+    # 2. 현재 데이터프레임에 존재하는 컬럼만 필터링
+    existing_cols = df.columns.tolist()
+    sorted_cols = [c for c in priority_order if c in existing_cols]
+    
+    # 3. 우선순위 목록에 없는 나머지 컬럼들 (뒤쪽에 붙임)
+    remaining_cols = [c for c in existing_cols if c not in sorted_cols]
+    
+    # 4. 최종 순서로 재배열하여 반환
+    return df[sorted_cols + remaining_cols]
+
 
 # 탭 구성
 tab1, tab2, tab3 = st.tabs(["🆕 신규 업로드 (덮어쓰기)", "✏️ 데이터 수정", "📜 이력 및 백업"])
@@ -29,9 +50,11 @@ with tab1:
         """
         **주의:** 이 기능은 **기존에 등록된 모든 데이터를 삭제**하고, 
         새로 업로드하는 파일로 **완전히 교체(Overwrite)** 합니다.
-        (이전 데이터는 자동으로 백업 폴더에 저장됩니다.)
         """
     )
+    
+    # [안내 문구 추가]
+    st.info("💡 엑셀 파일에 **'Nims 해지사유'** 컬럼이 포함되어 있다면, **'해지일자'** 바로 뒤에 표시됩니다.")
 
     method = st.radio("업로드 방식 선택", ["파일 업로드 (Excel/CSV)", "엑셀 붙여넣기"], horizontal=True)
     df_new = None
@@ -55,7 +78,12 @@ with tab1:
                 st.error(f"❌ 데이터 파싱 실패: {e}")
 
     if df_new is not None:
+        # 1. 컬럼명 표준화 (공백 제거 등)
         df_new = normalize_columns(df_new)
+        
+        # 2. [적용] 컬럼 순서 재배열 (Nims 해지사유 위치 조정)
+        df_new = reorder_columns(df_new)
+        
         curr_data = load_targets()
         curr_count = len(curr_data) if not curr_data.empty else 0
         new_count = len(df_new)
@@ -65,6 +93,7 @@ with tab1:
         col1.metric("현재 데이터 건수", f"{curr_count:,} 건", delta="삭제 예정", delta_color="inverse")
         col2.metric("신규 데이터 건수", f"{new_count:,} 건", delta="교체 예정", delta_color="normal")
         
+        # 3. 미리보기 (순서가 바뀐 상태로 출력됨)
         with st.expander("🔍 업로드 데이터 미리보기", expanded=True):
             st.dataframe(df_new.head(), use_container_width=True)
 
@@ -87,6 +116,9 @@ with tab2:
     curr = load_targets()
     
     if not curr.empty:
+        # [적용] 수정 화면에서도 보기 좋게 컬럼 정렬
+        curr = reorder_columns(curr)
+        
         edt = st.data_editor(curr, num_rows="dynamic", use_container_width=True, key="editor_tab2")
         if st.button("💾 수정사항 저장", type="primary"):
             save_targets(edt, "Manual Edit")
