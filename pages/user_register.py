@@ -16,7 +16,7 @@ st.markdown("""
         font-family: 'Pretendard', sans-serif;
     }
     
-    /* 1. 반응형 정보 그리드 (핵심 UI 개선) */
+    /* 1. 반응형 정보 그리드 */
     .info-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -24,7 +24,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
-    /* 화면이 좁아도 내용은 꽉 차게, 넓으면 가로로 배치 */
     .info-box {
         background: white;
         padding: 16px;
@@ -35,10 +34,12 @@ st.markdown("""
         flex-direction: column;
     }
     
-    /* 라벨과 값 스타일 */
     .info-label { font-size: 0.8rem; color: #64748b; margin-bottom: 4px; font-weight: 500; }
     .info-value { font-size: 1.1rem; font-weight: 700; color: #1e293b; word-break: break-all; }
-    .highlight { color: #ef4444; } /* 붉은색 강조 */
+    
+    /* 강조 색상 클래스 */
+    .highlight { color: #ef4444; } /* 붉은색 (해지일자) */
+    .highlight-blue { color: #2563eb; } /* 파란색 (Nims 사유) */
 
     /* 2. 입력 폼 컨테이너 */
     .form-container {
@@ -119,11 +120,11 @@ idx = st.selectbox(
 row = pending.loc[idx]
 
 # ==========================================
-# 4. 고객 정보 (반응형 Grid 적용)
+# 4. 고객 정보
 # ==========================================
 st.markdown("### 🏢 고객 기본 정보")
 
-# [핵심] 해지일자 컬럼명 자동 매핑 (해지_해지일자 or 해지일자)
+# 날짜 포맷팅
 origin_date = row.get("해지일자", row.get("해지_해지일자", "-"))
 try: 
     if pd.notna(origin_date) and str(origin_date).strip() != "-":
@@ -132,6 +133,10 @@ try:
         origin_date = "-"
 except: 
     pass
+
+# Nims 해지사유
+nims_reason = row.get("Nims 해지사유", row.get("Nims해지사유", "-"))
+if pd.isna(nims_reason): nims_reason = "-"
 
 st.markdown(f"""
 <div class="info-grid">
@@ -155,6 +160,10 @@ st.markdown(f"""
         <div class="info-label">해지일자</div>
         <div class="info-value highlight">{origin_date}</div>
     </div>
+    <div class="info-box">
+        <div class="info-label">Nims 해지사유</div>
+        <div class="info-value highlight-blue">{nims_reason}</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -170,44 +179,43 @@ st.markdown("### ✍️ 조치 내용 입력")
 
 st.markdown('<div class="form-container">', unsafe_allow_html=True)
 
+# 1) 사유 및 불만유형
 c1, c2 = st.columns(2)
 with c1: r = st.selectbox("해지 사유 (필수)", sorted(reason_map["해지사유"].unique()))
 with c2: c = st.selectbox("불만 유형 (필수)", reason_map[reason_map["해지사유"]==r]["불만유형"].unique())
 
+# 2) 상세 내용
 d = st.text_area("상세 내용", height=100, placeholder="내용을 입력하세요")
 
-c3, c4 = st.columns(2)
-with c3: rd = st.date_input("사유 등록 일자", value=date.today())
-with c4: rm = st.text_area("비고", height=70, placeholder="특이사항")
+# 3) 비고 (날짜 입력란 삭제됨)
+rm = st.text_area("비고", height=70, placeholder="특이사항")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 6. 저장 로직 (멈춤 방지)
+# 6. 저장 로직
 # ==========================================
 st.markdown("---")
 
 if st.button("💾 저장 후 다음", type="primary", use_container_width=True):
     with st.spinner("저장 중..."):
         try:
-            # 저장할 데이터 딕셔너리 생성
             save_data = row.to_dict()
             
-            # [중요] 불필요한 기존 키 제거 및 새 데이터 덮어쓰기
             save_data.update({
                 "해지사유": r,
                 "불만유형": c,
                 "세부 해지사유 및 불만 내용": d,
-                "해지일자": origin_date, # 정제된 날짜 저장
-                "사유등록일자": rd.strftime("%Y-%m-%d"),
+                "해지일자": origin_date,
+                "Nims 해지사유": nims_reason,
+                # [수정됨] 입력란 대신 오늘 날짜(date.today) 자동 적용
+                "사유등록일자": date.today().strftime("%Y-%m-%d"), 
                 "비고": rm,
                 "처리일시": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
             })
             
-            # 해지_해지일자 키가 남아있다면 제거 (깔끔한 저장을 위해)
             if "해지_해지일자" in save_data: del save_data["해지_해지일자"]
             
-            # 저장 실행
             save_result(save_data)
             
             st.toast(f"✅ 저장되었습니다! [{row.get('상호')}]", icon="💾")
